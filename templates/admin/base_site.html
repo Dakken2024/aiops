@@ -1,0 +1,534 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <span class="ai-brain">🧠</span>
+        <span style="margin-left: 8px; font-weight: 300;">AiOps 智能运维中心</span>
+    </a>
+</h1>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    {# ============================================================ #}
+    {# AiOps Admin 全局响应式布局覆盖 - 100% 自适应 #}
+    {# ============================================================ #}
+
+    :root {
+        --ai-primary: #667eea;
+        --ai-purple: #764ba2;
+        --ai-sidebar-width: 240px;
+    }
+
+    {# ===== 1. 根容器：100% 宽度 ===== #}
+    html, body {
+        width: 100%;
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+    }
+
+    {# ===== 2. Django Admin 主容器全宽 ===== #}
+    #container {
+        max-width: none !important;
+        width: 100% !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+
+    .main {
+        max-width: none !important;
+        width: 100% !important;
+        padding: 20px 24px !important;
+        box-sizing: border-box !important;
+    }
+
+    {# ===== 3. 内容标题区全宽 ===== #}
+    #content h1 {
+        max-width: none !important;
+        width: 100% !important;
+        padding-right: 16px !important;
+    }
+
+    {# ===== 4. Module/App 列表页全宽自适应 ===== #}
+    #content-related,
+    .module {
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    .module caption,
+    .module h2 {
+        max-width: none !important;
+    }
+
+    {# ===== 5. 表格 100% 响应式（横向滚动） ===== #}
+    #result_list,
+    .results table,
+    .module table {
+        width: 100% !important;
+        max-width: 100% !important;
+        table-layout: auto !important;
+        display: table !important;
+    }
+
+    .results {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        max-width: 100% !important;
+    }
+
+    .results table th,
+    .results table td {
+        white-space: nowrap !important;
+        min-width: 60px !important;
+        word-break: keep-all !important;
+    }
+
+    {# ===== 6. 过滤器侧栏响应式 ===== #}
+    #changelist-filter {
+        flex-shrink: 0 !important;
+        width: 220px !important;
+        max-width: 220px !important;
+    }
+    #changelist-filter h2 {
+        font-size: 13px !important;
+    }
+    #changelist-filter ul li a {
+        word-break: break-word !important;
+    }
+
+    {# ===== 7. 变更列表主区域弹性 ===== #}
+    #changelist {
+        display: flex !important;
+        gap: 24px !important;
+        align-items: flex-start !important;
+        flex-wrap: nowrap !important;
+    }
+
+    #changelist-form {
+        flex: 1 !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        overflow-x: auto !important;
+    }
+
+    #toolbar {
+        flex-wrap: wrap !important;
+        max-width: none !important;
+    }
+
+    #changelist-search > div {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .actions {
+        flex-shrink: 0 !important;
+    }
+
+    {# ===== 8. 分页器 ===== #}
+    .paginator {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 10px !important;
+        max-width: none !important;
+        padding: 12px 0 !important;
+    }
+
+    .paginator a, .paginator .this-page, .paginator .page-end {
+        padding: 6px 12px !important;
+        border-radius: 6px !important;
+    }
+
+    {# ===== 9. Object Tools (新增/导入等按钮) ===== #}
+    .object-tools {
+        max-width: none !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+    .object-tools li {
+        margin-left: 0 !important;
+    }
+    .object-tools li a {
+        border-radius: 8px !important;
+        transition: all 0.2s !important;
+    }
+    .object-tools li a:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15) !important;
+    }
+
+    {# ===== 10. 表单页面全宽 ===== #}
+    .submit-row {
+        max-width: none !important;
+        text-align: left !important;
+        padding: 16px 0 !important;
+        display: flex !important;
+        gap: 10px !important;
+        flex-wrap: wrap !important;
+    }
+    .submit-row input[type=submit],
+    .submit-row .deletelink-box {
+        border-radius: 8px !important;
+    }
+
+    .aligned label {
+        max-width: none !important;
+        word-break: break-word !important;
+    }
+
+    form .form-row {
+        display: grid !important;
+        grid-template-columns: 160px 1fr !important;
+        gap: 8px 16px !important;
+        align-items: start !important;
+        max-width: none !important;
+    }
+    form .form-row > *:last-child {
+        grid-column: 2 !important;
+        min-width: 0 !important;
+    }
+    form .form-row > *:first-child:not(label):not(.help) {
+        grid-column: 1 / -1 !important;
+    }
+
+    .vLargeTextField,
+    .vTextField,
+    .vURLField {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    select[multiple] {
+        width: 100% !important;
+        min-height: 120px !important;
+    }
+
+    {# ===== 11. Messages / Toast ===== #}
+    .messagelist {
+        max-width: none !important;
+        width: 100% !important;
+        border-radius: 10px !important;
+    }
+    .messagelist li {
+        border-radius: 8px !important;
+        margin-bottom: 6px !important;
+        padding: 10px 16px !important;
+    }
+
+    {# ===== 12. Breadcrumb ===== #}
+    .breadcrumbs {
+        max-width: none !important;
+        font-size: 12px !important;
+        padding: 10px 24px !important;
+        background: linear-gradient(to right, #fafbfc, #fff) !important;
+        border-bottom: 1px solid #f0f0f0 !important;
+    }
+    .breadcrumbs a {
+        color: var(--ai-primary) !important;
+        transition: color 0.2s !important;
+    }
+    .breadcrumbs a:hover {
+        color: var(--ai-purple) !important;
+    }
+
+    {# ===== 13. 登录页面 ===== #}
+    #login-form {
+        max-width: 400px !important;
+        width: 90% !important;
+        margin: 80px auto !important;
+        border-radius: 16px !important;
+        box-shadow: 0 8px 40px rgba(0,0,0,0.08) !important;
+        padding: 36px !important;
+    }
+    #login-form .form-row {
+        margin-bottom: 18px !important;
+    }
+    #login-form #id_username,
+    #login-form #id_password {
+        width: 100% !important;
+        padding: 12px 14px !important;
+        border-radius: 8px !important;
+        border: 2px solid #e8e8e8 !important;
+        transition: border-color 0.3s !important;
+    }
+    #login-form #id_username:focus,
+    #login-form #id_password:focus {
+        border-color: var(--ai-primary) !important;
+        box-shadow: 0 0 0 3px rgba(102,126,234,0.1) !important;
+    }
+    #login-form .submit-row {
+        justify-content: center !important;
+    }
+    .login #container {
+        background: linear-gradient(135deg, #f5f7fa 0%, #e4e8f0 100%) !important;
+        min-height: 100vh !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    {# ===== 14. App Index 页面（/monitoring/admin/monitoring/）===== #}
+    .app-contents {
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)) !important;
+        gap: 16px !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    .app-module {
+        border-radius: 14px !important;
+        overflow: hidden !important;
+        border: 1px solid #f0f0f0 !important;
+        transition: all 0.25s ease !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.04) !important;
+    }
+    .app-module:hover {
+        transform: translateY(-3px) !important;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.1) !important;
+        border-color: var(--ai-primary) !important;
+    }
+    .app-module table {
+        margin: 0 !important;
+        width: 100% !important;
+    }
+    .app-module table td:first-child a {
+        font-weight: 600 !important;
+        font-size: 14px !important;
+        color: #262626 !important;
+    }
+    .app-module tr th {
+        display: none !important;
+    }
+    .app-module tbody tr {
+        border-bottom: 1px solid #f5f5f5 !important;
+    }
+    .app-module tbody tr:last-child {
+        border-bottom: none !important;
+    }
+    .app-module td {
+        padding: 10px 16px !important;
+    }
+    .module .addlink,
+    .module .changelink {
+        display: inline-block !important;
+        padding: 5px 14px !important;
+        border-radius: 20px !important;
+        font-size: 12px !important;
+        margin-top: 4px !important;
+        transition: all 0.2s !important;
+    }
+    .module .addlink:hover {
+        background: var(--ai-primary) !important;
+        color: white !important;
+        transform: scale(1.05);
+    }
+    .module .changelink:hover {
+        transform: scale(1.05);
+    }
+
+    {# ===== 15. Dashboard 模块列表 ===== #}
+    #content-main {
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    {# ===== 16. 通用链接样式增强 ===== #}
+    a:link, a:visited {
+        transition: all 0.2s ease !important;
+    }
+
+    {# ============================================================ #}
+    {# 响应式断点 #}
+    {# ============================================================ #}
+
+    @media screen and (max-width: 1024px) {
+        .main {
+            padding: 16px !important;
+        }
+
+        #changelist {
+            flex-direction: column !important;
+        }
+
+        #changelist-filter {
+            width: 100% !important;
+            max-width: none !important;
+            order: -1 !important;
+        }
+        #changelist-filter h3,
+        #changelist-filter h2 {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .app-contents {
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+        }
+
+        form .form-row {
+            grid-template-columns: 1fr !important;
+        }
+        form .form-row label {
+            grid-column: 1 / -1 !important;
+            font-weight: 600 !important;
+            margin-bottom: 4px !important;
+        }
+        form .form-row > *:last-child {
+            grid-column: 1 / -1 !important;
+        }
+    }
+
+    @media screen and (max-width: 768px) {
+        .main {
+            padding: 12px !important;
+        }
+
+        .breadcrumbs {
+            padding: 8px 12px !important;
+            font-size: 11px !important;
+        }
+
+        .ai-status-bar {
+            flex-direction: column !important;
+            gap: 16px !important;
+            text-align: center !important;
+        }
+        .ai-stats-row {
+            justify-content: center !important;
+            gap: 20px !important;
+        }
+
+        .ai-grid-4 {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 10px !important;
+        }
+        .ai-card-value {
+            font-size: 24px !important;
+        }
+        .ai-card-sub {
+            position: relative !important;
+            bottom: auto !important;
+            right: auto !important;
+            margin-top: 6px !important;
+            font-size: 10px !important;
+        }
+        .ai-card-trend {
+            display: none !important;
+        }
+
+        .ai-main-layout {
+            grid-template-columns: 1fr !important;
+        }
+
+        .app-contents {
+            grid-template-columns: 1fr !important;
+            gap: 12px !important;
+        }
+
+        .object-tools {
+            flex-direction: column !important;
+            align-items: stretch !important;
+        }
+        .object-tools li {
+            text-align: center !important;
+        }
+
+        .submit-row {
+            flex-direction: column !important;
+        }
+        .submit-row input[type=submit],
+        .submit-row .deletelink-box {
+            width: 100% !important;
+            text-align: center !important;
+        }
+
+        #login-form {
+            margin: 30px auto !important;
+            padding: 24px !important;
+            width: 95% !important;
+        }
+
+        .di-diagnosis-item {
+            flex-direction: column !important;
+            gap: 10px !important;
+        }
+
+        .root-cause-chart {
+            flex-direction: column !important;
+        }
+        .pie-container {
+            width: 110px !important;
+            height: 110px !important;
+        }
+
+        .quick-actions-grid {
+            grid-template-columns: repeat(3, 1fr) !important;
+        }
+    }
+
+    @media screen and (max-width: 480px) {
+        .ai-grid-4 {
+            grid-template-columns: 1fr !important;
+        }
+
+        .ai-stat-item {
+            flex: 1 !important;
+        }
+        .ai-stat-value {
+            font-size: 18px !important;
+        }
+
+        .quick-actions-grid {
+            grid-template-columns: 1fr 1fr !important;
+        }
+
+        .cluster-item {
+            flex-direction: column !important;
+            gap: 8px !important;
+        }
+
+        .alert-enhanced-item {
+            flex-direction: column !important;
+            gap: 6px !important;
+        }
+        .alert-right {
+            text-align: left !important;
+        }
+
+        .trend-chart {
+            height: 50px !important;
+        }
+    }
+
+    {# ===== 17. 打印适配 ===== #}
+    @media print {
+        #header, .breadcrumbs, .object-tools, .actions,
+        #changelist-filter, #toolbar, .paginator,
+        .ai-status-bar, .ai-pulse {
+            display: none !important;
+        }
+        .main {
+            padding: 0 !important;
+        }
+        .results table th,
+        .results table td {
+            white-space: normal !important;
+        }
+    }
+</style>
+{% endblock %}
