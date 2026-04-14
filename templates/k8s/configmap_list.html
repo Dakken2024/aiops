@@ -1,0 +1,227 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark"><i class="fas fa-file-code text-primary mr-2"></i>配置管理 (ConfigMap)</h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}<option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+                    </select>
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id={{ current_cluster.id }}&namespace='+this.value">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}<option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>{% endfor %}
+                    </select>
+                    <a href="{% url 'k8s_resource_create' %}" class="btn btn-success"><i class="fas fa-plus"></i> 新建</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-primary card-outline">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead><tr><th>Name</th><th>Namespace</th><th>Keys</th><th>Keys Preview</th><th>Age</th><th>Action</th></tr></thead>
+            <tbody>
+                {% for cm in cms %}
+                <tr>
+                    <td class="font-weight-bold">{{ cm.name }}</td>
+                    <td><span class="badge badge-light border">{{ cm.namespace }}</span></td>
+                    <td><span class="badge badge-info">{{ cm.keys_count }}</span></td>
+                    <td class="text-muted small">{{ cm.keys_str }}</td>
+                    <td>{{ cm.age|date:"Y-m-d" }}</td>
+                    <td>
+                        <button class="btn btn-xs btn-primary" onclick="openEditor('{{ cm.name }}', '{{ cm.namespace }}')">
+                            <i class="fas fa-edit"></i> 编辑
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="cmEditorModal" tabindex="-1">
+    <div class="modal-dialog modal-xl" style="max-width: 90%;">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> <span id="cmTitle"></span>
+                </h5>
+                <button class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-3 border-right">
+                        <h6 class="text-muted border-bottom pb-2">历史版本</h6>
+                        <div id="historyList" class="list-group list-group-flush" style="height: 500px; overflow-y: auto;">
+                            </div>
+                    </div>
+                    
+                    <div class="col-md-9">
+                        <div class="d-flex justify-content-between mb-2">
+                            <div>
+                                <span class="badge badge-warning" id="modeLabel">Current (Editable)</span>
+                            </div>
+                            <div class="custom-control custom-switch">
+                                <input type="checkbox" class="custom-control-input" id="autoRestartCheck">
+                                <label class="custom-control-label text-danger font-weight-bold" for="autoRestartCheck">自动滚动更新关联应用</label>
+                            </div>
+                        </div>
+                        
+                        <div id="monaco-container" style="height: 500px; border: 1px solid #444;"></div>
+                        
+                        <div class="input-group mt-3">
+                            <div class="input-group-prepend"><span class="input-group-text">变更备注</span></div>
+                            <input type="text" id="cmRemarks" class="form-control" placeholder="例如：修改数据库连接地址">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <button class="btn btn-default" onclick="exitDiffMode()" id="btnExitDiff" style="display:none;">退出对比</button>
+                <div>
+                    <button class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                    <button class="btn btn-success" onclick="saveConfigMap()">保存并应用</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+    var editor, diffEditor;
+    var currentCm = {name: '', ns: ''};
+    var originalModel, modifiedModel;
+
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        // 普通编辑器
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: "", language: 'yaml', theme: 'vs-dark', automaticLayout: true, minimap: {enabled: true}
+        });
+    });
+
+    const clusterId = "{{ current_cluster.id }}";
+    const csrftoken = "{{ csrf_token }}";
+
+    // 1. 打开编辑器
+    function openEditor(name, ns) {
+        currentCm = {name, ns};
+        $('#cmTitle').text(`${ns} / ${name}`);
+        $('#cmEditorModal').modal('show');
+        exitDiffMode(); // 确保重置为编辑模式
+        loadHistory();
+        
+        editor.setValue("# Loading...");
+        $.post("{% url 'k8s_configmap_api' %}", {
+            action: 'get', cluster_id: clusterId, name: name, namespace: ns
+        }, function(res) {
+            if(res.status) editor.setValue(res.data);
+            else alert(res.msg);
+        });
+    }
+
+    // 2. 加载历史
+    function loadHistory() {
+        $('#historyList').html('<div class="p-3 text-center"><i class="fas fa-spinner fa-spin"></i></div>');
+        $.post("{% url 'k8s_configmap_api' %}", {
+            action: 'history_list', cluster_id: clusterId, name: currentCm.name, namespace: currentCm.ns
+        }, function(res) {
+            let html = '';
+            if(res.status && res.data.length > 0) {
+                res.data.forEach(h => {
+                    html += `
+                    <a href="#" class="list-group-item list-group-item-action flex-column align-items-start" onclick="compareVersion(${h.id}, ${h.version})">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1 text-primary">v${h.version}</h6>
+                            <small>${new Date(h.updated_at).toLocaleDateString()}</small>
+                        </div>
+                        <p class="mb-1 small text-muted">${h.description || '无备注'}</p>
+                        <small>By: ${h.user}</small>
+                    </a>`;
+                });
+            } else {
+                html = '<div class="p-3 text-center text-muted">暂无历史记录</div>';
+            }
+            $('#historyList').html(html);
+        });
+    }
+
+    // 3. 对比模式 (Diff)
+    function compareVersion(historyId, ver) {
+        // 销毁普通编辑器，创建 Diff 编辑器
+        if(editor) {
+            window.currentContent = editor.getValue(); // 暂存当前内容
+            editor.dispose(); editor = null;
+        }
+        $('#monaco-container').empty();
+        
+        diffEditor = monaco.editor.createDiffEditor(document.getElementById('monaco-container'), {
+            theme: 'vs-dark', automaticLayout: true, readOnly: true
+        });
+
+        $('#modeLabel').text(`Diff: Current vs v${ver}`).removeClass('badge-warning').addClass('badge-info');
+        $('#btnExitDiff').show();
+
+        // 获取历史内容
+        $.post("{% url 'k8s_configmap_api' %}", {
+            action: 'get_history_content', cluster_id: clusterId, history_id: historyId
+        }, function(res) {
+            const original = monaco.editor.createModel(res.data, 'yaml'); // 历史版本
+            const modified = monaco.editor.createModel(window.currentContent, 'yaml'); // 当前编辑框的内容
+            diffEditor.setModel({ original: original, modified: modified });
+        });
+    }
+
+    // 4. 退出对比
+    function exitDiffMode() {
+        if(diffEditor) {
+            diffEditor.dispose(); diffEditor = null;
+        }
+        $('#monaco-container').empty();
+        $('#modeLabel').text('Current (Editable)').removeClass('badge-info').addClass('badge-warning');
+        $('#btnExitDiff').hide();
+
+        // 重建普通编辑器
+        require(['vs/editor/editor.main'], function() {
+            editor = monaco.editor.create(document.getElementById('monaco-container'), {
+                value: window.currentContent || "", 
+                language: 'yaml', theme: 'vs-dark', automaticLayout: true
+            });
+        });
+    }
+
+    // 5. 保存
+    function saveConfigMap() {
+        if(diffEditor) { alert("请先退出对比模式 (Exit Diff)"); return; }
+        if(!confirm("确定要保存修改吗？")) return;
+
+        const content = editor.getValue();
+        const restart = $('#autoRestartCheck').is(':checked');
+        const remarks = $('#cmRemarks').val();
+
+        $.post("{% url 'k8s_configmap_api' %}", {
+            action: 'update',
+            cluster_id: clusterId,
+            name: currentCm.name, namespace: currentCm.ns,
+            content: content,
+            auto_restart: restart,
+            remarks: remarks
+        }, function(res) {
+            alert(res.msg);
+            if(res.status) {
+                $('#cmEditorModal').modal('hide');
+                location.reload();
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: ops-agent
+  namespace: kube-system
+  labels:
+    app: ops-agent
+spec:
+  selector:
+    matchLabels:
+      app: ops-agent
+  template:
+    metadata:
+      labels:
+        app: ops-agent
+    spec:
+      hostPID: true
+      hostNetwork: true  # 必须开启，这样 Agent 监听的 10055 才是宿主机的 IP
+      containers:
+      - name: agent
+        image: registry.cn-shanghai.aliyuncs.com/calico_k8s/agent:V3 # 记得更新版本
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: true
+
+        # === 端口配置 ===
+        ports:
+          - containerPort: 10055
+            hostPort: 10055
+            name: metrics
+
+        env:
+          # 不再需要 SERVER_URL 和 CLUSTER_TOKEN (改为被动拉取)
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+
+        # === 健康检查 (改为 HTTP) ===
+        livenessProbe:
+          httpGet:
+            path: /metrics
+            port: 10055
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5  # 因为接口会 sleep 1s，超时不要设太短

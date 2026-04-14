@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>K8s Shell | {{ pod_name }}</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.min.css" />
+    <style>body { margin: 0; background: #000; }</style>
+</head>
+<body>
+    <div id="terminal" style="width: 100vw; height: 100vh;"></div>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
+    <script>
+        const term = new Terminal({ cursorBlink: true, theme: { background: '#1e1e1e' } });
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(document.getElementById('terminal'));
+        fitAddon.fit();
+
+        // 构造 WebSocket URL (带参数)
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const wsUrl = `${wsScheme}://${window.location.host}/ws/k8s/shell/?cluster_id={{ cluster_id }}&namespace={{ namespace }}&pod_name={{ pod_name }}`;
+
+        const socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => term.write('\r\n\x1b[32mConnecting to K8s Pod...\x1b[0m\r\n');
+        socket.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.data) term.write(msg.data);
+        };
+        socket.onclose = () => term.write('\r\n\x1b[31mConnection closed.\x1b[0m');
+        socket.onerror = () => term.write('\r\n\x1b[31mConnection error.\x1b[0m');
+
+        term.onData(data => socket.send(JSON.stringify({ data: data })));
+        window.addEventListener('resize', () => fitAddon.fit());
+    </script>
+</body>
+</html>

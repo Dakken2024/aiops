@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-layer-group text-primary mr-2"></i>有状态服务 (StatefulSets)
+                </h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}
+                        <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select class="form-control" onchange="changeNamespace(this.value)">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}
+                        <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Name</th>
+                    <th>Replicas (Ready/Total)</th>
+                    <th>Image</th>
+                    <th>Age</th>
+                    <th>操作</th> </tr>
+            </thead>
+            <tbody>
+                {% for s in statefulsets %}
+                <tr>
+                    <td><span class="badge badge-light border">{{ s.namespace }}</span></td>
+                    <td><b>{{ s.name }}</b></td>
+                    <td><span class="badge badge-info">{{ s.replicas }}</span></td>
+                    <td><small class="text-muted">{{ s.image|truncatechars:40 }}</small></td>
+                    <td>{{ s.age|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <a href="{% url 'k8s_workload_detail' %}?kind=StatefulSet&name={{ s.name }}&namespace={{ s.namespace }}&cluster_id={{ current_cluster.id }}"
+                           class="btn btn-xs btn-info">
+                            <i class="fas fa-eye"></i> 详情
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function changeNamespace(ns) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('namespace', ns);
+        window.location.search = urlParams.toString();
+    }
+</script>
+{% endblock %}

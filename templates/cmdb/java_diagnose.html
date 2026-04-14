@@ -1,0 +1,296 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<div class="row">
+    <div class="col-md-12 mb-3">
+        <div class="card card-primary card-outline">
+            <div class="card-body">
+                <div class="form-inline">
+                    <label class="mr-3"><i class="fas fa-server"></i> 选择目标服务器：</label>
+                    <select id="serverSelect" class="form-control mr-3" style="min-width: 250px;">
+                        <option value="">-- 请选择 --</option>
+                        {% for s in servers %}
+                        <option value="{{ s.id }}">{{ s.hostname }} ({{ s.ip_address }})</option>
+                        {% endfor %}
+                    </select>
+
+                    <button class="btn btn-primary" onclick="fetchProcesses()">
+                        <i class="fas fa-search"></i> 扫描 Java 进程
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header bg-light">
+                <h3 class="card-title">Java 进程列表</h3>
+                <div class="card-tools">
+                    <span id="procCount" class="badge badge-primary">0</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th style="width: 140px;">类型 / PID</th>
+                            <th>Java 版本</th>
+                            <th>用户 / 容器名</th>
+                            <th>资源 (CPU/MEM)</th>
+                            <th>启动命令 / 镜像</th>
+                            <th style="width: 100px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="procTableBody">
+                        <tr><td colspan="6" class="text-center text-muted py-4">请先选择服务器并点击扫描</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="javaModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success">
+                <h5 class="modal-title text-white"><i class="fab fa-java mr-2"></i>JVM 深度诊断</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+
+                <div class="alert alert-light border d-flex align-items-center mb-3">
+                    <i class="fas fa-info-circle text-info mr-2"></i>
+                    <span class="mr-1">正在诊断:</span>
+                    <strong id="lblTargetType" class="mr-2"></strong>
+                    <span id="lblTargetName" class="badge badge-dark mr-2 font-monospace" style="font-size: 100%;"></span>
+                    <span class="mr-1">JDK:</span>
+                    <span id="lblJdkVer" class="badge badge-warning"></span>
+                </div>
+
+                <div class="form-group">
+                    <label class="small text-muted">选择 AI 分析模型：</label>
+                    <select id="aiModelSelect" class="form-control form-control-sm">
+                        {% for m in ai_models %}
+                        <option value="{{ m.id }}">{{ m.name }}</option>
+                        {% empty %}
+                        <option value="">默认模型</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="small text-muted">应用日志文件路径 (可选)：</label>
+                    <input type="text" id="logPathInput" class="form-control form-control-sm" placeholder="">
+                    <small class="text-muted" id="logPathHelp">
+                        <i class="fas fa-info-circle"></i> 填写路径后，AI 将分析日志末尾的异常信息。
+                    </small>
+                </div>
+
+                <hr>
+
+                <div id="aiLoading" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-success" role="status"></div>
+                    <p class="mt-3 text-muted font-weight-bold">正在进行全方位深度扫描...</p>
+                    <div class="text-left d-inline-block text-muted small mt-2" style="line-height: 1.8;">
+                        <div id="stepSidecar"><i class="fas fa-check text-success mr-1"></i> 挂载诊断 Sidecar (JDK/Arthas)...</div>
+                        <div><i class="fas fa-check text-success mr-1"></i> 采集 JVM 内存直方图 / GC状态...</div>
+                        <div><i class="fas fa-check text-success mr-1"></i> 审计 JVM 启动参数 (jinfo)...</div>
+                        <div><i class="fas fa-check text-success mr-1"></i> 运行 Arthas Dashboard 获取实时大盘...</div>
+                        <div><i class="fas fa-brain text-success mr-1"></i> AI 专家正在综合分析...</div>
+                    </div>
+                </div>
+
+                <div id="aiContent" class="markdown-body" style="display: none; padding: 15px; background: #f8f9fa; border-radius: 4px; border: 1px solid #ddd;"></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-success" onclick="startDiagnose()">
+                    <i class="fas fa-play-circle mr-1"></i> 开始深度分析
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentServerId = null;
+    // 当前选中的进程上下文
+    let selectedProc = {
+        pid: '',
+        type: 'host',
+        container_id: '',
+        java_version: '8'
+    };
+
+    // === 1. 获取进程列表 ===
+    function fetchProcesses() {
+        const sid = $('#serverSelect').val();
+        if(!sid) { alert("请选择服务器"); return; }
+
+        currentServerId = sid;
+        $('#procTableBody').html('<tr><td colspan="6" class="text-center"><i class="fas fa-spinner fa-spin"></i> 正在扫描 (包含宿主机与容器)...</td></tr>');
+
+        $.ajax({
+            url: '{% url "get_java_processes" %}',
+            data: { server_id: sid },
+            success: function(res) {
+                if(res.status) {
+                    const list = res.data;
+                    $('#procCount').text(list.length);
+                    if(list.length === 0) {
+                        $('#procTableBody').html('<tr><td colspan="6" class="text-center text-muted">未发现 Java 进程</td></tr>');
+                        return;
+                    }
+
+                    let html = '';
+                    list.forEach(p => {
+                        // 样式处理：区分 Docker 和 Host
+                        const isDocker = p.type === 'docker';
+
+                        // 类型标签
+                        const typeLabel = isDocker
+                            ? `<span class="badge badge-info"><i class="fab fa-docker"></i> Docker</span>`
+                            : `<span class="badge badge-secondary"><i class="fas fa-server"></i> Host</span>`;
+
+                        // 名称显示
+                        const nameDisplay = isDocker
+                            ? `<strong>${p.container_name}</strong><br><small class="text-muted" title="${p.container_id}">ID: ${p.container_id.substring(0,12)}</small>`
+                            : `<strong>${p.user}</strong>`;
+
+                        // 版本显示
+                        let verClass = 'badge-light';
+                        if (p.java_version && (p.java_version.includes('17') || p.java_version.includes('21'))) verClass = 'badge-success';
+                        else if (p.java_version && (p.java_version.includes('1.8') || p.java_version.includes('8'))) verClass = 'badge-warning';
+
+                        const verBadge = `<span class="badge ${verClass}">${p.java_version || 'Unknown'}</span>`;
+
+                        // 按钮 (传递关键参数)
+                        // 注意：这里需要对 container_id 等字符串做转义处理，防止单引号破坏 HTML
+                        // 为简单起见，使用 replace 替换潜在的引号
+                        const cidClean = (p.container_id || '').replace(/'/g, "");
+                        const verClean = (p.java_version || '8').replace(/'/g, "");
+
+                        html += `
+                        <tr>
+                            <td>${typeLabel} <span class="badge badge-dark ml-1">${p.pid}</span></td>
+                            <td>${verBadge}</td>
+                            <td>${nameDisplay}</td>
+                            <td><span class="text-danger">${p.cpu}</span> / <span class="text-primary">${p.mem}</span></td>
+                            <td title="${p.cmd}" style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; font-size: 12px; color: #555;">
+                                ${p.cmd}
+                            </td>
+                            <td>
+                                <button class="btn btn-xs btn-success"
+                                    onclick="openDiagnose('${p.pid}', '${p.type}', '${cidClean}', '${verClean}')">
+                                    <i class="fas fa-user-md"></i> 诊断
+                                </button>
+                            </td>
+                        </tr>
+                        `;
+                    });
+                    $('#procTableBody').html(html);
+                } else {
+                    alert(res.msg);
+                    $('#procTableBody').html('<tr><td colspan="6" class="text-center text-danger">扫描失败: ' + res.msg + '</td></tr>');
+                }
+            },
+            error: function() {
+                $('#procTableBody').html('<tr><td colspan="6" class="text-center text-danger">网络请求失败</td></tr>');
+            }
+        });
+    }
+
+    // === 2. 打开诊断弹窗 ===
+    function openDiagnose(pid, type, cid, ver) {
+        selectedProc = { pid, type, container_id: cid, java_version: ver };
+
+        // 更新 UI 提示信息
+        const typeText = (type === 'docker') ? 'Docker 容器' : '宿主机进程';
+        const nameText = (type === 'docker') ? cid.substring(0,12) : pid;
+
+        $('#lblTargetType').text(typeText);
+        $('#lblTargetName').text(nameText);
+        $('#lblJdkVer').text(ver);
+
+        // 动态调整 Loading 文案
+        if (type === 'docker') {
+            $('#stepSidecar').show(); // 显示挂载 Sidecar 步骤
+            // Docker 模式下，日志通常直接采集 stdout，无需输入路径
+            $('#logPathInput').prop('disabled', true).attr('placeholder', 'Docker 模式自动采集 logs (stdout)，无需填写');
+            $('#logPathHelp').html('<i class="fas fa-check-circle text-success"></i> 系统将自动采集 `docker logs` 的最后 100 行。');
+        } else {
+            $('#stepSidecar').hide(); // Host 模式不需要 Sidecar
+            $('#logPathInput').prop('disabled', false).attr('placeholder', '/var/log/app/error.log');
+            $('#logPathHelp').html('Host 模式：请填写日志文件的绝对路径。');
+        }
+
+        // 重置弹窗状态
+        $('#javaModal').modal('show');
+        $('#aiContent').hide().html('');
+        $('#aiLoading').hide();
+        $('#logPathInput').val('');
+    }
+
+    // === 3. 开始执行诊断 ===
+    function startDiagnose() {
+        // UI 状态切换
+        $('#aiLoading').show();
+        $('#aiContent').hide();
+
+        // 收集参数
+        const modelId = $('#aiModelSelect').val();
+        const logPath = $('#logPathInput').val();
+
+        $.ajax({
+            url: '{% url "diagnose_java_process" %}',
+            type: 'POST',
+            data: {
+                server_id: currentServerId,
+                model_id: modelId,
+                log_path: logPath,
+                // 核心诊断参数
+                pid: selectedProc.pid,
+                type: selectedProc.type,
+                container_id: selectedProc.container_id,
+                java_version: selectedProc.java_version,
+                'csrfmiddlewaretoken': '{{ csrf_token }}' // 确保 CSRF Token
+            },
+            success: function(res) {
+                $('#aiLoading').hide();
+                if(res.status) {
+                    // 渲染 Markdown 报告
+                    $('#aiContent').html(marked.parse(res.analysis)).show();
+                } else {
+                    // 显示错误信息
+                    $('#aiContent').html(`
+                        <div class="alert alert-danger">
+                            <h5><i class="icon fas fa-ban"></i> 诊断失败</h5>
+                            ${res.msg}
+                        </div>
+                    `).show();
+                }
+            },
+            error: function(xhr) {
+                $('#aiLoading').hide();
+                let errMsg = "请求超时或网络错误";
+                if (selectedProc.type === 'docker') {
+                    errMsg += "。<br>提示：Docker 模式首次诊断可能因为拉取 Sidecar 镜像较慢导致超时，请稍后重试。";
+                }
+                $('#aiContent').html(`<div class="alert alert-danger">${errMsg}</div>`).show();
+            }
+        });
+    }
+
+    // 模型切换时的提示 (可选)
+    $('#aiModelSelect').change(function() {
+        if($('#aiContent').is(':visible')) {
+            if(confirm("切换模型将重新进行分析，是否继续？")) startDiagnose();
+        }
+    });
+</script>
+{% endblock %}

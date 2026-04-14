@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    .analysis-result { background: #f8f9fa; border: 1px solid #ddd; padding: 15px; border-radius: 4px; height: 400px; overflow-y: auto; }
+    #monaco-container { height: 500px; border: 1px solid #ced4da; border-radius: 4px; }
+</style>
+
+<div class="row">
+    <div class="col-md-7">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title">创建资源 (YAML)</h3>
+
+                <div class="form-inline">
+                    <select id="aiModelSelect" class="form-control form-control-sm mr-2" style="width: 150px;">
+                        {% for m in ai_models %}
+                        <option value="{{ m.id }}">{{ m.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button type="button" class="btn btn-warning btn-sm" onclick="analyzeYaml()">
+                        <i class="fas fa-magic"></i> AI 智能审计
+                    </button>
+                </div>
+            </div>
+
+            <form method="post" id="createForm">
+                {% csrf_token %}
+                <div class="card-body">
+                    {% if create_success %}
+                        <div class="alert alert-success"><i class="fas fa-check"></i> {{ create_success }}</div>
+                    {% endif %}
+                    {% if create_error %}
+                        <div class="alert alert-danger"><i class="fas fa-ban"></i> {{ create_error }}</div>
+                    {% endif %}
+
+                    <div class="form-group">
+                        <label class="mr-2">目标集群：</label>
+                        <select name="cluster_id" class="form-control shadow-sm" style="width: auto; display: inline-block; font-weight: bold; color: #495057;">
+                            {% for c in clusters %}
+                                <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>
+                                    {{ c.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <span class="text-muted small ml-2">(可直接切换提交)</span>
+                    </div>
+
+                    <div class="form-group">
+                        <div id="monaco-container"></div>
+                        <input type="hidden" name="yaml_content" id="yamlInput">
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <button type="button" class="btn btn-success float-right" onclick="submitYaml()">
+                        <i class="fas fa-paper-plane"></i> 提交创建
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-5" id="aiPanel" style="display: none;">
+        <div class="card card-warning card-outline">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-robot"></i> 审计报告</h3>
+                <div class="card-tools">
+                    <button type="button" class="btn btn-tool" onclick="$('#aiPanel').hide()"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="aiLoading" class="text-center py-5">
+                    <div class="spinner-border text-warning" role="status"></div>
+                    <p class="mt-3 text-muted">AI 正在扫描配置隐患...</p>
+                </div>
+                <div id="aiResult" class="markdown-body analysis-result" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var editor;
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        var defaultValue = [
+            'apiVersion: v1',
+            'kind: Pod',
+            'metadata:',
+            '  name: test-pod',
+            'spec:',
+            '  containers:',
+            '  - name: nginx',
+            '    image: nginx:latest',
+            '    ports:',
+            '    - containerPort: 80'
+        ].join('\n');
+
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: defaultValue,
+            language: 'yaml',
+            theme: 'vs',
+            automaticLayout: true,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false,
+            fontSize: 14,
+            tabSize: 2
+        });
+    });
+
+    function submitYaml() {
+        if (!editor) return;
+        $('#yamlInput').val(editor.getValue());
+        $('#createForm').submit();
+    }
+
+    function analyzeYaml() {
+        if (!editor) return;
+        var yaml = editor.getValue();
+        if (!yaml.trim()) { alert("请先输入 YAML 内容"); return; }
+
+        $('#aiPanel').show(); $('#aiResult').hide(); $('#aiLoading').show();
+
+        $.ajax({
+            url: '{% url "k8s_yaml_analyze" %}',
+            type: 'POST',
+            data: { 'yaml_content': yaml, 'model_id': $('#aiModelSelect').val() },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(res) {
+                $('#aiLoading').hide();
+                $('#aiResult').html(res.status ? marked.parse(res.analysis) : '<div class="text-danger">' + res.msg + '</div>').show();
+            },
+            error: function() { $('#aiLoading').hide(); $('#aiResult').html('<div class="text-danger">请求失败</div>').show(); }
+        });
+    }
+</script>
+{% endblock %}

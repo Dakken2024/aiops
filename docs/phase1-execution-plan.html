@@ -1,0 +1,1818 @@
+<!DOCTYPE html><html><head>
+<title>phase1-execution-plan.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/*
+
+Arduino® Light Theme - Stefania Mellai <s.mellai@arduino.cc>
+
+*/
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background: #FFFFFF;
+}
+
+.hljs,
+.hljs-subst {
+  color: #434f54;
+}
+
+.hljs-keyword,
+.hljs-attribute,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-name {
+  color: #00979D;
+}
+
+.hljs-built_in,
+.hljs-literal,
+.hljs-bullet,
+.hljs-code,
+.hljs-addition {
+  color: #D35400;
+}
+
+.hljs-regexp,
+.hljs-symbol,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #00979D;
+}
+
+.hljs-type,
+.hljs-string,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-quote,
+.hljs-template-tag,
+.hljs-deletion {
+  color: #005C5F;
+}
+
+.hljs-title,
+.hljs-section {
+  color: #880000;
+  font-weight: bold;
+}
+
+.hljs-comment {
+  color: rgba(149,165,166,.8);
+}
+
+.hljs-meta-keyword {
+  color: #728E00;
+}
+
+.hljs-meta {
+  color: #434f54;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-function {
+  color: #728E00;
+}
+
+.hljs-number {
+  color: #8A7B52;  
+}
+
+</style>
+
+<style>
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family:   "HelveticaNeue-Light", sans-serif, "宋体","Segoe WPC", "Segoe UI", "SFUIText-Light","Droid Sans Fallback";
+	font-size: 18px;
+	padding: 0 12px;
+	line-height: 1.6;
+	word-wrap: break-word;
+	color: #333333;
+}
+
+.content-wrapper{
+	max-width: 860px;
+    margin: 0 auto;
+    padding: 0 30px;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	color: #4080D0;
+	text-decoration: none;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom: 1px solid #eee;
+}
+
+
+h2{
+	padding-bottom: .3em;
+    font-size: 2em;
+    line-height: 1.225;
+    border-bottom: 1px solid #eee;
+}
+
+h3{
+	font-size: 1.75em;
+    line-height: 1.225;
+}
+
+h1, h2, h3 {
+	font-weight: bold;
+}
+
+h1 code,
+h2 code,
+h3 code,
+h4 code,
+h5 code,
+h6 code {
+	font-size: inherit;
+	line-height: auto;
+}
+
+a:hover {
+	color: #4080D0;
+	text-decoration: underline;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left: 5px solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 14px;
+	line-height: 19px;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+.mac code {
+	font-size: 12px;
+	line-height: 18px;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+/** Theming */
+
+.vscode-light,
+.vscode-light pre code {
+	color: rgb(30, 30, 30);
+}
+
+.vscode-dark,
+.vscode-dark pre code {
+	color: #DDD;
+}
+
+.vscode-high-contrast,
+.vscode-high-contrast pre code {
+	color: white;
+}
+
+.vscode-light code {
+	color: #A31515;
+}
+
+.vscode-dark code {
+	color: #D7BA7D;
+}
+
+.vscode-light pre:not(.hljs),
+.vscode-light code > div {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre:not(.hljs),
+.vscode-dark code > div {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre:not(.hljs),
+.vscode-high-contrast code > div {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+.vscode-light blockquote,
+.vscode-dark blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.vscode-high-contrast blockquote {
+	background: transparent;
+	border-color: #fff;
+}
+</style>
+
+<style>
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+.table-of-contents li{
+	list-style-type: initial;
+}
+</style>
+
+<style>
+@font-face{font-family:KaTeX_AMS;font-style:normal;font-weight:400;src:url(fonts/KaTeX_AMS-Regular.woff2) format("woff2"),url(fonts/KaTeX_AMS-Regular.woff) format("woff"),url(fonts/KaTeX_AMS-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Caligraphic;font-style:normal;font-weight:700;src:url(fonts/KaTeX_Caligraphic-Bold.woff2) format("woff2"),url(fonts/KaTeX_Caligraphic-Bold.woff) format("woff"),url(fonts/KaTeX_Caligraphic-Bold.ttf) format("truetype")}@font-face{font-family:KaTeX_Caligraphic;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Caligraphic-Regular.woff2) format("woff2"),url(fonts/KaTeX_Caligraphic-Regular.woff) format("woff"),url(fonts/KaTeX_Caligraphic-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Fraktur;font-style:normal;font-weight:700;src:url(fonts/KaTeX_Fraktur-Bold.woff2) format("woff2"),url(fonts/KaTeX_Fraktur-Bold.woff) format("woff"),url(fonts/KaTeX_Fraktur-Bold.ttf) format("truetype")}@font-face{font-family:KaTeX_Fraktur;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Fraktur-Regular.woff2) format("woff2"),url(fonts/KaTeX_Fraktur-Regular.woff) format("woff"),url(fonts/KaTeX_Fraktur-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:700;src:url(fonts/KaTeX_Main-Bold.woff2) format("woff2"),url(fonts/KaTeX_Main-Bold.woff) format("woff"),url(fonts/KaTeX_Main-Bold.ttf) format("truetype")}@font-face{font-family:KaTeX_Main;font-style:italic;font-weight:700;src:url(fonts/KaTeX_Main-BoldItalic.woff2) format("woff2"),url(fonts/KaTeX_Main-BoldItalic.woff) format("woff"),url(fonts/KaTeX_Main-BoldItalic.ttf) format("truetype")}@font-face{font-family:KaTeX_Main;font-style:italic;font-weight:400;src:url(fonts/KaTeX_Main-Italic.woff2) format("woff2"),url(fonts/KaTeX_Main-Italic.woff) format("woff"),url(fonts/KaTeX_Main-Italic.ttf) format("truetype")}@font-face{font-family:KaTeX_Main;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Main-Regular.woff2) format("woff2"),url(fonts/KaTeX_Main-Regular.woff) format("woff"),url(fonts/KaTeX_Main-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Math;font-style:italic;font-weight:700;src:url(fonts/KaTeX_Math-BoldItalic.woff2) format("woff2"),url(fonts/KaTeX_Math-BoldItalic.woff) format("woff"),url(fonts/KaTeX_Math-BoldItalic.ttf) format("truetype")}@font-face{font-family:KaTeX_Math;font-style:italic;font-weight:400;src:url(fonts/KaTeX_Math-Italic.woff2) format("woff2"),url(fonts/KaTeX_Math-Italic.woff) format("woff"),url(fonts/KaTeX_Math-Italic.ttf) format("truetype")}@font-face{font-family:"KaTeX_SansSerif";font-style:normal;font-weight:700;src:url(fonts/KaTeX_SansSerif-Bold.woff2) format("woff2"),url(fonts/KaTeX_SansSerif-Bold.woff) format("woff"),url(fonts/KaTeX_SansSerif-Bold.ttf) format("truetype")}@font-face{font-family:"KaTeX_SansSerif";font-style:italic;font-weight:400;src:url(fonts/KaTeX_SansSerif-Italic.woff2) format("woff2"),url(fonts/KaTeX_SansSerif-Italic.woff) format("woff"),url(fonts/KaTeX_SansSerif-Italic.ttf) format("truetype")}@font-face{font-family:"KaTeX_SansSerif";font-style:normal;font-weight:400;src:url(fonts/KaTeX_SansSerif-Regular.woff2) format("woff2"),url(fonts/KaTeX_SansSerif-Regular.woff) format("woff"),url(fonts/KaTeX_SansSerif-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Script;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Script-Regular.woff2) format("woff2"),url(fonts/KaTeX_Script-Regular.woff) format("woff"),url(fonts/KaTeX_Script-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Size1;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Size1-Regular.woff2) format("woff2"),url(fonts/KaTeX_Size1-Regular.woff) format("woff"),url(fonts/KaTeX_Size1-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Size2;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Size2-Regular.woff2) format("woff2"),url(fonts/KaTeX_Size2-Regular.woff) format("woff"),url(fonts/KaTeX_Size2-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Size3;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Size3-Regular.woff2) format("woff2"),url(fonts/KaTeX_Size3-Regular.woff) format("woff"),url(fonts/KaTeX_Size3-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Size4;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Size4-Regular.woff2) format("woff2"),url(fonts/KaTeX_Size4-Regular.woff) format("woff"),url(fonts/KaTeX_Size4-Regular.ttf) format("truetype")}@font-face{font-family:KaTeX_Typewriter;font-style:normal;font-weight:400;src:url(fonts/KaTeX_Typewriter-Regular.woff2) format("woff2"),url(fonts/KaTeX_Typewriter-Regular.woff) format("woff"),url(fonts/KaTeX_Typewriter-Regular.ttf) format("truetype")}.katex{text-rendering:auto;font:normal 1.21em KaTeX_Main,Times New Roman,serif;line-height:1.2;text-indent:0}.katex *{-ms-high-contrast-adjust:none!important;border-color:currentColor}.katex .katex-version:after{content:"0.16.2"}.katex .katex-mathml{clip:rect(1px,1px,1px,1px);border:0;height:1px;overflow:hidden;padding:0;position:absolute;width:1px}.katex .katex-html>.newline{display:block}.katex .base{position:relative;white-space:nowrap;width:-webkit-min-content;width:-moz-min-content;width:min-content}.katex .base,.katex .strut{display:inline-block}.katex .textbf{font-weight:700}.katex .textit{font-style:italic}.katex .textrm{font-family:KaTeX_Main}.katex .textsf{font-family:KaTeX_SansSerif}.katex .texttt{font-family:KaTeX_Typewriter}.katex .mathnormal{font-family:KaTeX_Math;font-style:italic}.katex .mathit{font-family:KaTeX_Main;font-style:italic}.katex .mathrm{font-style:normal}.katex .mathbf{font-family:KaTeX_Main;font-weight:700}.katex .boldsymbol{font-family:KaTeX_Math;font-style:italic;font-weight:700}.katex .amsrm,.katex .mathbb,.katex .textbb{font-family:KaTeX_AMS}.katex .mathcal{font-family:KaTeX_Caligraphic}.katex .mathfrak,.katex .textfrak{font-family:KaTeX_Fraktur}.katex .mathtt{font-family:KaTeX_Typewriter}.katex .mathscr,.katex .textscr{font-family:KaTeX_Script}.katex .mathsf,.katex .textsf{font-family:KaTeX_SansSerif}.katex .mathboldsf,.katex .textboldsf{font-family:KaTeX_SansSerif;font-weight:700}.katex .mathitsf,.katex .textitsf{font-family:KaTeX_SansSerif;font-style:italic}.katex .mainrm{font-family:KaTeX_Main;font-style:normal}.katex .vlist-t{border-collapse:collapse;display:inline-table;table-layout:fixed}.katex .vlist-r{display:table-row}.katex .vlist{display:table-cell;position:relative;vertical-align:bottom}.katex .vlist>span{display:block;height:0;position:relative}.katex .vlist>span>span{display:inline-block}.katex .vlist>span>.pstrut{overflow:hidden;width:0}.katex .vlist-t2{margin-right:-2px}.katex .vlist-s{display:table-cell;font-size:1px;min-width:2px;vertical-align:bottom;width:2px}.katex .vbox{align-items:baseline;display:inline-flex;flex-direction:column}.katex .hbox{width:100%}.katex .hbox,.katex .thinbox{display:inline-flex;flex-direction:row}.katex .thinbox{max-width:0;width:0}.katex .msupsub{text-align:left}.katex .mfrac>span>span{text-align:center}.katex .mfrac .frac-line{border-bottom-style:solid;display:inline-block;width:100%}.katex .hdashline,.katex .hline,.katex .mfrac .frac-line,.katex .overline .overline-line,.katex .rule,.katex .underline .underline-line{min-height:1px}.katex .mspace{display:inline-block}.katex .clap,.katex .llap,.katex .rlap{position:relative;width:0}.katex .clap>.inner,.katex .llap>.inner,.katex .rlap>.inner{position:absolute}.katex .clap>.fix,.katex .llap>.fix,.katex .rlap>.fix{display:inline-block}.katex .llap>.inner{right:0}.katex .clap>.inner,.katex .rlap>.inner{left:0}.katex .clap>.inner>span{margin-left:-50%;margin-right:50%}.katex .rule{border:0 solid;display:inline-block;position:relative}.katex .hline,.katex .overline .overline-line,.katex .underline .underline-line{border-bottom-style:solid;display:inline-block;width:100%}.katex .hdashline{border-bottom-style:dashed;display:inline-block;width:100%}.katex .sqrt>.root{margin-left:.27777778em;margin-right:-.55555556em}.katex .fontsize-ensurer.reset-size1.size1,.katex .sizing.reset-size1.size1{font-size:1em}.katex .fontsize-ensurer.reset-size1.size2,.katex .sizing.reset-size1.size2{font-size:1.2em}.katex .fontsize-ensurer.reset-size1.size3,.katex .sizing.reset-size1.size3{font-size:1.4em}.katex .fontsize-ensurer.reset-size1.size4,.katex .sizing.reset-size1.size4{font-size:1.6em}.katex .fontsize-ensurer.reset-size1.size5,.katex .sizing.reset-size1.size5{font-size:1.8em}.katex .fontsize-ensurer.reset-size1.size6,.katex .sizing.reset-size1.size6{font-size:2em}.katex .fontsize-ensurer.reset-size1.size7,.katex .sizing.reset-size1.size7{font-size:2.4em}.katex .fontsize-ensurer.reset-size1.size8,.katex .sizing.reset-size1.size8{font-size:2.88em}.katex .fontsize-ensurer.reset-size1.size9,.katex .sizing.reset-size1.size9{font-size:3.456em}.katex .fontsize-ensurer.reset-size1.size10,.katex .sizing.reset-size1.size10{font-size:4.148em}.katex .fontsize-ensurer.reset-size1.size11,.katex .sizing.reset-size1.size11{font-size:4.976em}.katex .fontsize-ensurer.reset-size2.size1,.katex .sizing.reset-size2.size1{font-size:.83333333em}.katex .fontsize-ensurer.reset-size2.size2,.katex .sizing.reset-size2.size2{font-size:1em}.katex .fontsize-ensurer.reset-size2.size3,.katex .sizing.reset-size2.size3{font-size:1.16666667em}.katex .fontsize-ensurer.reset-size2.size4,.katex .sizing.reset-size2.size4{font-size:1.33333333em}.katex .fontsize-ensurer.reset-size2.size5,.katex .sizing.reset-size2.size5{font-size:1.5em}.katex .fontsize-ensurer.reset-size2.size6,.katex .sizing.reset-size2.size6{font-size:1.66666667em}.katex .fontsize-ensurer.reset-size2.size7,.katex .sizing.reset-size2.size7{font-size:2em}.katex .fontsize-ensurer.reset-size2.size8,.katex .sizing.reset-size2.size8{font-size:2.4em}.katex .fontsize-ensurer.reset-size2.size9,.katex .sizing.reset-size2.size9{font-size:2.88em}.katex .fontsize-ensurer.reset-size2.size10,.katex .sizing.reset-size2.size10{font-size:3.45666667em}.katex .fontsize-ensurer.reset-size2.size11,.katex .sizing.reset-size2.size11{font-size:4.14666667em}.katex .fontsize-ensurer.reset-size3.size1,.katex .sizing.reset-size3.size1{font-size:.71428571em}.katex .fontsize-ensurer.reset-size3.size2,.katex .sizing.reset-size3.size2{font-size:.85714286em}.katex .fontsize-ensurer.reset-size3.size3,.katex .sizing.reset-size3.size3{font-size:1em}.katex .fontsize-ensurer.reset-size3.size4,.katex .sizing.reset-size3.size4{font-size:1.14285714em}.katex .fontsize-ensurer.reset-size3.size5,.katex .sizing.reset-size3.size5{font-size:1.28571429em}.katex .fontsize-ensurer.reset-size3.size6,.katex .sizing.reset-size3.size6{font-size:1.42857143em}.katex .fontsize-ensurer.reset-size3.size7,.katex .sizing.reset-size3.size7{font-size:1.71428571em}.katex .fontsize-ensurer.reset-size3.size8,.katex .sizing.reset-size3.size8{font-size:2.05714286em}.katex .fontsize-ensurer.reset-size3.size9,.katex .sizing.reset-size3.size9{font-size:2.46857143em}.katex .fontsize-ensurer.reset-size3.size10,.katex .sizing.reset-size3.size10{font-size:2.96285714em}.katex .fontsize-ensurer.reset-size3.size11,.katex .sizing.reset-size3.size11{font-size:3.55428571em}.katex .fontsize-ensurer.reset-size4.size1,.katex .sizing.reset-size4.size1{font-size:.625em}.katex .fontsize-ensurer.reset-size4.size2,.katex .sizing.reset-size4.size2{font-size:.75em}.katex .fontsize-ensurer.reset-size4.size3,.katex .sizing.reset-size4.size3{font-size:.875em}.katex .fontsize-ensurer.reset-size4.size4,.katex .sizing.reset-size4.size4{font-size:1em}.katex .fontsize-ensurer.reset-size4.size5,.katex .sizing.reset-size4.size5{font-size:1.125em}.katex .fontsize-ensurer.reset-size4.size6,.katex .sizing.reset-size4.size6{font-size:1.25em}.katex .fontsize-ensurer.reset-size4.size7,.katex .sizing.reset-size4.size7{font-size:1.5em}.katex .fontsize-ensurer.reset-size4.size8,.katex .sizing.reset-size4.size8{font-size:1.8em}.katex .fontsize-ensurer.reset-size4.size9,.katex .sizing.reset-size4.size9{font-size:2.16em}.katex .fontsize-ensurer.reset-size4.size10,.katex .sizing.reset-size4.size10{font-size:2.5925em}.katex .fontsize-ensurer.reset-size4.size11,.katex .sizing.reset-size4.size11{font-size:3.11em}.katex .fontsize-ensurer.reset-size5.size1,.katex .sizing.reset-size5.size1{font-size:.55555556em}.katex .fontsize-ensurer.reset-size5.size2,.katex .sizing.reset-size5.size2{font-size:.66666667em}.katex .fontsize-ensurer.reset-size5.size3,.katex .sizing.reset-size5.size3{font-size:.77777778em}.katex .fontsize-ensurer.reset-size5.size4,.katex .sizing.reset-size5.size4{font-size:.88888889em}.katex .fontsize-ensurer.reset-size5.size5,.katex .sizing.reset-size5.size5{font-size:1em}.katex .fontsize-ensurer.reset-size5.size6,.katex .sizing.reset-size5.size6{font-size:1.11111111em}.katex .fontsize-ensurer.reset-size5.size7,.katex .sizing.reset-size5.size7{font-size:1.33333333em}.katex .fontsize-ensurer.reset-size5.size8,.katex .sizing.reset-size5.size8{font-size:1.6em}.katex .fontsize-ensurer.reset-size5.size9,.katex .sizing.reset-size5.size9{font-size:1.92em}.katex .fontsize-ensurer.reset-size5.size10,.katex .sizing.reset-size5.size10{font-size:2.30444444em}.katex .fontsize-ensurer.reset-size5.size11,.katex .sizing.reset-size5.size11{font-size:2.76444444em}.katex .fontsize-ensurer.reset-size6.size1,.katex .sizing.reset-size6.size1{font-size:.5em}.katex .fontsize-ensurer.reset-size6.size2,.katex .sizing.reset-size6.size2{font-size:.6em}.katex .fontsize-ensurer.reset-size6.size3,.katex .sizing.reset-size6.size3{font-size:.7em}.katex .fontsize-ensurer.reset-size6.size4,.katex .sizing.reset-size6.size4{font-size:.8em}.katex .fontsize-ensurer.reset-size6.size5,.katex .sizing.reset-size6.size5{font-size:.9em}.katex .fontsize-ensurer.reset-size6.size6,.katex .sizing.reset-size6.size6{font-size:1em}.katex .fontsize-ensurer.reset-size6.size7,.katex .sizing.reset-size6.size7{font-size:1.2em}.katex .fontsize-ensurer.reset-size6.size8,.katex .sizing.reset-size6.size8{font-size:1.44em}.katex .fontsize-ensurer.reset-size6.size9,.katex .sizing.reset-size6.size9{font-size:1.728em}.katex .fontsize-ensurer.reset-size6.size10,.katex .sizing.reset-size6.size10{font-size:2.074em}.katex .fontsize-ensurer.reset-size6.size11,.katex .sizing.reset-size6.size11{font-size:2.488em}.katex .fontsize-ensurer.reset-size7.size1,.katex .sizing.reset-size7.size1{font-size:.41666667em}.katex .fontsize-ensurer.reset-size7.size2,.katex .sizing.reset-size7.size2{font-size:.5em}.katex .fontsize-ensurer.reset-size7.size3,.katex .sizing.reset-size7.size3{font-size:.58333333em}.katex .fontsize-ensurer.reset-size7.size4,.katex .sizing.reset-size7.size4{font-size:.66666667em}.katex .fontsize-ensurer.reset-size7.size5,.katex .sizing.reset-size7.size5{font-size:.75em}.katex .fontsize-ensurer.reset-size7.size6,.katex .sizing.reset-size7.size6{font-size:.83333333em}.katex .fontsize-ensurer.reset-size7.size7,.katex .sizing.reset-size7.size7{font-size:1em}.katex .fontsize-ensurer.reset-size7.size8,.katex .sizing.reset-size7.size8{font-size:1.2em}.katex .fontsize-ensurer.reset-size7.size9,.katex .sizing.reset-size7.size9{font-size:1.44em}.katex .fontsize-ensurer.reset-size7.size10,.katex .sizing.reset-size7.size10{font-size:1.72833333em}.katex .fontsize-ensurer.reset-size7.size11,.katex .sizing.reset-size7.size11{font-size:2.07333333em}.katex .fontsize-ensurer.reset-size8.size1,.katex .sizing.reset-size8.size1{font-size:.34722222em}.katex .fontsize-ensurer.reset-size8.size2,.katex .sizing.reset-size8.size2{font-size:.41666667em}.katex .fontsize-ensurer.reset-size8.size3,.katex .sizing.reset-size8.size3{font-size:.48611111em}.katex .fontsize-ensurer.reset-size8.size4,.katex .sizing.reset-size8.size4{font-size:.55555556em}.katex .fontsize-ensurer.reset-size8.size5,.katex .sizing.reset-size8.size5{font-size:.625em}.katex .fontsize-ensurer.reset-size8.size6,.katex .sizing.reset-size8.size6{font-size:.69444444em}.katex .fontsize-ensurer.reset-size8.size7,.katex .sizing.reset-size8.size7{font-size:.83333333em}.katex .fontsize-ensurer.reset-size8.size8,.katex .sizing.reset-size8.size8{font-size:1em}.katex .fontsize-ensurer.reset-size8.size9,.katex .sizing.reset-size8.size9{font-size:1.2em}.katex .fontsize-ensurer.reset-size8.size10,.katex .sizing.reset-size8.size10{font-size:1.44027778em}.katex .fontsize-ensurer.reset-size8.size11,.katex .sizing.reset-size8.size11{font-size:1.72777778em}.katex .fontsize-ensurer.reset-size9.size1,.katex .sizing.reset-size9.size1{font-size:.28935185em}.katex .fontsize-ensurer.reset-size9.size2,.katex .sizing.reset-size9.size2{font-size:.34722222em}.katex .fontsize-ensurer.reset-size9.size3,.katex .sizing.reset-size9.size3{font-size:.40509259em}.katex .fontsize-ensurer.reset-size9.size4,.katex .sizing.reset-size9.size4{font-size:.46296296em}.katex .fontsize-ensurer.reset-size9.size5,.katex .sizing.reset-size9.size5{font-size:.52083333em}.katex .fontsize-ensurer.reset-size9.size6,.katex .sizing.reset-size9.size6{font-size:.5787037em}.katex .fontsize-ensurer.reset-size9.size7,.katex .sizing.reset-size9.size7{font-size:.69444444em}.katex .fontsize-ensurer.reset-size9.size8,.katex .sizing.reset-size9.size8{font-size:.83333333em}.katex .fontsize-ensurer.reset-size9.size9,.katex .sizing.reset-size9.size9{font-size:1em}.katex .fontsize-ensurer.reset-size9.size10,.katex .sizing.reset-size9.size10{font-size:1.20023148em}.katex .fontsize-ensurer.reset-size9.size11,.katex .sizing.reset-size9.size11{font-size:1.43981481em}.katex .fontsize-ensurer.reset-size10.size1,.katex .sizing.reset-size10.size1{font-size:.24108004em}.katex .fontsize-ensurer.reset-size10.size2,.katex .sizing.reset-size10.size2{font-size:.28929605em}.katex .fontsize-ensurer.reset-size10.size3,.katex .sizing.reset-size10.size3{font-size:.33751205em}.katex .fontsize-ensurer.reset-size10.size4,.katex .sizing.reset-size10.size4{font-size:.38572806em}.katex .fontsize-ensurer.reset-size10.size5,.katex .sizing.reset-size10.size5{font-size:.43394407em}.katex .fontsize-ensurer.reset-size10.size6,.katex .sizing.reset-size10.size6{font-size:.48216008em}.katex .fontsize-ensurer.reset-size10.size7,.katex .sizing.reset-size10.size7{font-size:.57859209em}.katex .fontsize-ensurer.reset-size10.size8,.katex .sizing.reset-size10.size8{font-size:.69431051em}.katex .fontsize-ensurer.reset-size10.size9,.katex .sizing.reset-size10.size9{font-size:.83317261em}.katex .fontsize-ensurer.reset-size10.size10,.katex .sizing.reset-size10.size10{font-size:1em}.katex .fontsize-ensurer.reset-size10.size11,.katex .sizing.reset-size10.size11{font-size:1.19961427em}.katex .fontsize-ensurer.reset-size11.size1,.katex .sizing.reset-size11.size1{font-size:.20096463em}.katex .fontsize-ensurer.reset-size11.size2,.katex .sizing.reset-size11.size2{font-size:.24115756em}.katex .fontsize-ensurer.reset-size11.size3,.katex .sizing.reset-size11.size3{font-size:.28135048em}.katex .fontsize-ensurer.reset-size11.size4,.katex .sizing.reset-size11.size4{font-size:.32154341em}.katex .fontsize-ensurer.reset-size11.size5,.katex .sizing.reset-size11.size5{font-size:.36173633em}.katex .fontsize-ensurer.reset-size11.size6,.katex .sizing.reset-size11.size6{font-size:.40192926em}.katex .fontsize-ensurer.reset-size11.size7,.katex .sizing.reset-size11.size7{font-size:.48231511em}.katex .fontsize-ensurer.reset-size11.size8,.katex .sizing.reset-size11.size8{font-size:.57877814em}.katex .fontsize-ensurer.reset-size11.size9,.katex .sizing.reset-size11.size9{font-size:.69453376em}.katex .fontsize-ensurer.reset-size11.size10,.katex .sizing.reset-size11.size10{font-size:.83360129em}.katex .fontsize-ensurer.reset-size11.size11,.katex .sizing.reset-size11.size11{font-size:1em}.katex .delimsizing.size1{font-family:KaTeX_Size1}.katex .delimsizing.size2{font-family:KaTeX_Size2}.katex .delimsizing.size3{font-family:KaTeX_Size3}.katex .delimsizing.size4{font-family:KaTeX_Size4}.katex .delimsizing.mult .delim-size1>span{font-family:KaTeX_Size1}.katex .delimsizing.mult .delim-size4>span{font-family:KaTeX_Size4}.katex .nulldelimiter{display:inline-block;width:.12em}.katex .delimcenter,.katex .op-symbol{position:relative}.katex .op-symbol.small-op{font-family:KaTeX_Size1}.katex .op-symbol.large-op{font-family:KaTeX_Size2}.katex .accent>.vlist-t,.katex .op-limits>.vlist-t{text-align:center}.katex .accent .accent-body{position:relative}.katex .accent .accent-body:not(.accent-full){width:0}.katex .overlay{display:block}.katex .mtable .vertical-separator{display:inline-block;min-width:1px}.katex .mtable .arraycolsep{display:inline-block}.katex .mtable .col-align-c>.vlist-t{text-align:center}.katex .mtable .col-align-l>.vlist-t{text-align:left}.katex .mtable .col-align-r>.vlist-t{text-align:right}.katex .svg-align{text-align:left}.katex svg{fill:currentColor;stroke:currentColor;fill-rule:nonzero;fill-opacity:1;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;display:block;height:inherit;position:absolute;width:100%}.katex svg path{stroke:none}.katex img{border-style:none;max-height:none;max-width:none;min-height:0;min-width:0}.katex .stretchy{display:block;overflow:hidden;position:relative;width:100%}.katex .stretchy:after,.katex .stretchy:before{content:""}.katex .hide-tail{overflow:hidden;position:relative;width:100%}.katex .halfarrow-left{left:0;overflow:hidden;position:absolute;width:50.2%}.katex .halfarrow-right{overflow:hidden;position:absolute;right:0;width:50.2%}.katex .brace-left{left:0;overflow:hidden;position:absolute;width:25.1%}.katex .brace-center{left:25%;overflow:hidden;position:absolute;width:50%}.katex .brace-right{overflow:hidden;position:absolute;right:0;width:25.1%}.katex .x-arrow-pad{padding:0 .5em}.katex .cd-arrow-pad{padding:0 .55556em 0 .27778em}.katex .mover,.katex .munder,.katex .x-arrow{text-align:center}.katex .boxpad{padding:0 .3em}.katex .fbox,.katex .fcolorbox{border:.04em solid;box-sizing:border-box}.katex .cancel-pad{padding:0 .2em}.katex .cancel-lap{margin-left:-.2em;margin-right:-.2em}.katex .sout{border-bottom-style:solid;border-bottom-width:.08em}.katex .angl{border-right:.049em solid;border-top:.049em solid;box-sizing:border-box;margin-right:.03889em}.katex .anglpad{padding:0 .03889em}.katex .eqn-num:before{content:"(" counter(katexEqnNo) ")";counter-increment:katexEqnNo}.katex .mml-eqn-num:before{content:"(" counter(mmlEqnNo) ")";counter-increment:mmlEqnNo}.katex .mtr-glue{width:50%}.katex .cd-vert-arrow{display:inline-block;position:relative}.katex .cd-label-left{display:inline-block;position:absolute;right:calc(50% + .3em);text-align:left}.katex .cd-label-right{display:inline-block;left:calc(50% + .3em);position:absolute;text-align:right}.katex-display{display:block;margin:1em 0;text-align:center}.katex-display>.katex{display:block;text-align:center;white-space:nowrap}.katex-display>.katex>.katex-html{display:block;position:relative}.katex-display>.katex>.katex-html>.tag{position:absolute;right:0}.katex-display.leqno>.katex>.katex-html>.tag{left:0;right:auto}.katex-display.fleqn>.katex{padding-left:2em;text-align:left}body{counter-reset:katexEqnNo mmlEqnNo}
+
+</style>
+
+</head>
+<body>
+    <div class="content-wrapper">
+        <h1 id="aiops-%E5%AE%9E%E6%97%B6%E9%A2%84%E8%AD%A6%E4%B8%8E%E7%9B%91%E6%8E%A7-%E2%80%94-phase-1-%E5%8F%AF%E6%89%A7%E8%A1%8C%E5%BC%80%E5%8F%91%E8%AE%A1%E5%88%92" tabindex="-1">AiOps 实时预警与监控 — Phase 1 可执行开发计划</h1>
+<p><strong>文档版本</strong>: v1.0-EXEC<br>
+<strong>创建日期</strong>: 2026-04-13<br>
+<strong>基于</strong>: <code>realtime-alerting-monitoring-analysis-and-implementation.md</code><br>
+<strong>目标</strong>: 从零构建基础告警能力，让项目具备可配置的实时预警系统</p>
+<hr>
+<h2 id="%F0%9F%93%8B-phase-1-%E8%8C%83%E5%9B%B4%E5%AE%9A%E4%B9%89" tabindex="-1">📋 Phase 1 范围定义</h2>
+<h3 id="%E6%9C%AC%E9%98%B6%E6%AE%B5%E4%BA%A4%E4%BB%98%E7%89%A9" tabindex="-1">本阶段交付物</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>交付物</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>monitoring Django 应用</strong></td>
+<td>完整的 models/admin/apps/migrations</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>规则引擎</strong></td>
+<td>支持6种规则类型的评估器 (threshold/baseline/trend/composite/absence/anomaly)</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>异常检测算法库</strong></td>
+<td>ZScore/IQR/MovingAvg/RateOfChange/Composite 5种检测器</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>多渠道通知中心</strong></td>
+<td>钉钉/企微/邮件/Slack/Webhook + Celery重试</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>REST API</strong></td>
+<td>规则CRUD + 告警事件管理 + 统计接口</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Celery调度任务</strong></td>
+<td>规则自动评估定时任务</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Dashboard增强</strong></td>
+<td>告警面板嵌入现有仪表盘</td>
+</tr>
+</tbody>
+</table>
+<h3 id="%E4%B8%8D%E5%9C%A8%E6%9C%AC%E9%98%B6%E6%AE%B5%E8%8C%83%E5%9B%B4" tabindex="-1">不在本阶段范围</h3>
+<ul>
+<li>Prometheus/TimescaleDB 时序数据库集成 (Phase 2)</li>
+<li>Grafana 可视化对接 (Phase 2)</li>
+<li>Vue3 前端组件重写 (Phase 3)</li>
+<li>WebSocket 实时推送 (Phase 3)</li>
+</ul>
+<hr>
+<h2 id="%F0%9F%94%A7-%E6%89%A7%E8%A1%8C%E5%89%8D%E5%87%86%E5%A4%87" tabindex="-1">🔧 执行前准备</h2>
+<h3 id="step-0%3A-%E5%AE%89%E8%A3%85%E6%96%B0%E5%A2%9E%E4%BE%9D%E8%B5%96" tabindex="-1">Step 0: 安装新增依赖</h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># 在项目根目录 d:\codes\aiops\ 下执行</span>
+pip install scikit-learn statsmodels numpy
+</div></code></pre>
+<p>修改 [requirements.txt](file:///d:/codes/aiops/requirements.txt)，追加以下内容：</p>
+<pre class="hljs"><code><div>scikit-learn&gt;=1.3.0
+statsmodels&gt;=0.14.0
+numpy&gt;=1.24.0
+</div></code></pre>
+<hr>
+<h2 id="%F0%9F%93%81-%E6%96%87%E4%BB%B6%E5%88%9B%E5%BB%BA%E6%B8%85%E5%8D%95-(%E5%85%B1%E9%9C%80%E6%96%B0%E5%BB%BA%2F%E4%BF%AE%E6%94%B9-12-%E4%B8%AA%E6%96%87%E4%BB%B6)" tabindex="-1">📁 文件创建清单 (共需新建/修改 12 个文件)</h2>
+<pre class="hljs"><code><div>新建文件 (10个):
+├── monitoring/
+│   ├── __init__.py
+│   ├── apps.py
+│   ├── models.py                    ← 核心数据模型
+│   ├── admin.py                     ← Admin后台管理
+│   ├── engine/
+│   │   ├── __init__.py
+│   │   └── rule_evaluator.py        ← 规则引擎核心
+│   ├── anomaly_detector.py          ← 异常检测算法库
+│   ├── notification/
+│   │   ├── __init__.py
+│   │   └── channel_manager.py       ← 多渠道通知中心
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── views.py                 ← REST API视图
+│   │   └── urls.py                  ← API路由
+│   └── management/
+│       └── commands/
+│           └── evaluate_rules.py    ← Celery定时任务
+│   └── migrations/
+│       └── __init__.py              ← 迁移目录初始化
+
+修改文件 (3个):
+├── ops_platform/settings.py         ← 注册monitoring应用 + 新增日志配置
+├── ops_platform/urls.py             ← 添加监控路由
+├── templates/index.html             ← Dashboard嵌入告警面板
+</div></code></pre>
+<hr>
+<h2 id="%F0%9F%9A%80-%E8%AF%A6%E7%BB%86%E6%89%A7%E8%A1%8C%E6%AD%A5%E9%AA%A4" tabindex="-1">🚀 详细执行步骤</h2>
+<h3 id="step-1%3A-%E5%88%9B%E5%BB%BA-monitoring-%E5%BA%94%E7%94%A8%E9%AA%A8%E6%9E%B6" tabindex="-1">Step 1: 创建 monitoring 应用骨架</h3>
+<h4 id="1.1-%E5%88%9B%E5%BB%BA%E7%9B%AE%E5%BD%95%E7%BB%93%E6%9E%84" tabindex="-1">1.1 创建目录结构</h4>
+<p>在 <code>d:\codes\aiops\</code> 下执行以下命令：</p>
+<pre class="hljs"><code><div><span class="hljs-built_in">mkdir</span> monitoring
+<span class="hljs-built_in">mkdir</span> monitoring\engine
+<span class="hljs-built_in">mkdir</span> monitoring\notification
+<span class="hljs-built_in">mkdir</span> monitoring\api
+<span class="hljs-built_in">mkdir</span> monitoring\management\commands
+<span class="hljs-built_in">mkdir</span> monitoring\migrations
+</div></code></pre>
+<h4 id="1.2-%E5%88%9B%E5%BB%BA-monitoring%2F__init__.py" tabindex="-1">1.2 创建 <code>monitoring/__init__.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/__init__.py</span>
+default_app_config = <span class="hljs-string">'monitoring.apps.MonitoringConfig'</span>
+</div></code></pre>
+<h4 id="1.3-%E5%88%9B%E5%BB%BA-monitoring%2Fapps.py" tabindex="-1">1.3 创建 <code>monitoring/apps.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/apps.py</span>
+<span class="hljs-keyword">from</span> django.apps <span class="hljs-keyword">import</span> AppConfig
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">MonitoringConfig</span>(<span class="hljs-title class_ inherited__">AppConfig</span>):
+    default_auto_field = <span class="hljs-string">'django.db.models.BigAutoField'</span>
+    name = <span class="hljs-string">'monitoring'</span>
+    verbose_name = <span class="hljs-string">'智能监控告警'</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">ready</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-keyword">pass</span>
+</div></code></pre>
+<h4 id="1.4-%E5%88%9B%E5%BB%BA-monitoring%2Fmigrations%2F__init__.py" tabindex="-1">1.4 创建 <code>monitoring/migrations/__init__.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/migrations/__init__.py</span>
+</div></code></pre>
+<hr>
+<h3 id="step-2%3A-%E6%A0%B8%E5%BF%83%E6%95%B0%E6%8D%AE%E6%A8%A1%E5%9E%8B-%E2%80%94-monitoring%2Fmodels.py" tabindex="-1">Step 2: 核心数据模型 — <code>monitoring/models.py</code></h3>
+<p>完整代码写入 <code>d:\codes\aiops\monitoring\models.py</code>：</p>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/models.py</span>
+<span class="hljs-keyword">import</span> json
+<span class="hljs-keyword">from</span> django.db <span class="hljs-keyword">import</span> models
+<span class="hljs-keyword">from</span> django.contrib.auth.models <span class="hljs-keyword">import</span> User
+<span class="hljs-keyword">from</span> django.utils <span class="hljs-keyword">import</span> timezone
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertRule</span>(models.Model):
+    SEVERITY_CHOICES = [
+        (<span class="hljs-string">'P0'</span>, <span class="hljs-string">'致命 (Critical)'</span>),
+        (<span class="hljs-string">'P1'</span>, <span class="hljs-string">'严重 (Major)'</span>),
+        (<span class="hljs-string">'P2'</span>, <span class="hljs-string">'警告 (Warning)'</span>),
+        (<span class="hljs-string">'P3'</span>, <span class="hljs-string">'提示 (Info)'</span>),
+    ]
+    STATUS_CHOICES = [
+        (<span class="hljs-string">'enabled'</span>, <span class="hljs-string">'启用'</span>),
+        (<span class="hljs-string">'disabled'</span>, <span class="hljs-string">'禁用'</span>),
+        (<span class="hljs-string">'draft'</span>, <span class="hljs-string">'草稿'</span>),
+    ]
+    RULE_TYPE_CHOICES = [
+        (<span class="hljs-string">'threshold'</span>, <span class="hljs-string">'静态阈值'</span>),
+        (<span class="hljs-string">'baseline'</span>, <span class="hljs-string">'动态基线'</span>),
+        (<span class="hljs-string">'trend'</span>, <span class="hljs-string">'趋势检测'</span>),
+        (<span class="hljs-string">'composite'</span>, <span class="hljs-string">'复合条件'</span>),
+        (<span class="hljs-string">'absence'</span>, <span class="hljs-string">'消失检测'</span>),
+        (<span class="hljs-string">'anomaly'</span>, <span class="hljs-string">'异常检测'</span>),
+    ]
+
+    name = models.CharField(<span class="hljs-string">"规则名称"</span>, max_length=<span class="hljs-number">200</span>, unique=<span class="hljs-literal">True</span>)
+    description = models.TextField(<span class="hljs-string">"规则描述"</span>, blank=<span class="hljs-literal">True</span>)
+    rule_type = models.CharField(<span class="hljs-string">"规则类型"</span>, max_length=<span class="hljs-number">20</span>, choices=RULE_TYPE_CHOICES, default=<span class="hljs-string">'threshold'</span>)
+    severity = models.CharField(<span class="hljs-string">"严重级别"</span>, max_length=<span class="hljs-number">10</span>, choices=SEVERITY_CHOICES, default=<span class="hljs-string">'P1'</span>)
+    status = models.CharField(<span class="hljs-string">"状态"</span>, max_length=<span class="hljs-number">20</span>, choices=STATUS_CHOICES, default=<span class="hljs-string">'enabled'</span>)
+
+    target_all = models.BooleanField(<span class="hljs-string">"应用于所有服务器"</span>, default=<span class="hljs-literal">True</span>)
+    metric_name = models.CharField(<span class="hljs-string">"监控指标"</span>, max_length=<span class="hljs-number">50</span>, default=<span class="hljs-string">'cpu_usage'</span>,
+        help_text=<span class="hljs-string">"cpu_usage / mem_usage / disk_usage / load_1min / net_in / net_out"</span>)
+    condition_config = models.JSONField(<span class="hljs-string">"条件配置"</span>, default=<span class="hljs-built_in">dict</span>,
+        help_text=<span class="hljs-string">"静态阈值:{'operator':'gt','value':90} / 动态基线:{'multiplier':1.5}"</span>)
+
+    evaluate_interval = models.PositiveIntegerField(<span class="hljs-string">"评估间隔(秒)"</span>, default=<span class="hljs-number">60</span>)
+    lookback_window = models.PositiveIntegerField(<span class="hljs-string">"回溯窗口(个)"</span>, default=<span class="hljs-number">5</span>)
+    cooldown_seconds = models.PositiveIntegerField(<span class="hljs-string">"冷却时间(秒)"</span>, default=<span class="hljs-number">300</span>,
+        help_text=<span class="hljs-string">"同一目标触发后N秒内不再重复触发"</span>)
+    max_alerts_per_hour = models.PositiveIntegerField(<span class="hljs-string">"每小时最大告警数"</span>, default=<span class="hljs-number">10</span>)
+
+    notify_channels = models.JSONField(<span class="hljs-string">"通知渠道"</span>, default=<span class="hljs-built_in">list</span>, help_text=<span class="hljs-string">"['dingtalk','wechat','email']"</span>)
+    notify_template = models.TextField(<span class="hljs-string">"通知模板"</span>, blank=<span class="hljs-literal">True</span>, default=<span class="hljs-string">""</span>)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    created_at = models.DateTimeField(auto_now_add=<span class="hljs-literal">True</span>)
+    updated_at = models.DateTimeField(auto_now=<span class="hljs-literal">True</span>)
+    last_triggered_at = models.DateTimeField(<span class="hljs-string">"最后触发时间"</span>, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    trigger_count = models.PositiveIntegerField(<span class="hljs-string">"累计触发次数"</span>, default=<span class="hljs-number">0</span>)
+
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Meta</span>:
+        ordering = [<span class="hljs-string">'-created_at'</span>]
+        verbose_name = <span class="hljs-string">"预警规则"</span>
+        verbose_name_plural = <span class="hljs-string">"预警规则"</span>
+        indexes = [
+            models.Index(fields=[<span class="hljs-string">'status'</span>, <span class="hljs-string">'rule_type'</span>]),
+            models.Index(fields=[<span class="hljs-string">'severity'</span>]),
+        ]
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__str__</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-keyword">return</span> <span class="hljs-string">f"[<span class="hljs-subst">{self.severity}</span>] <span class="hljs-subst">{self.name}</span>"</span>
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertEvent</span>(models.Model):
+    STATUS_CHOICES = [
+        (<span class="hljs-string">'firing'</span>, <span class="hljs-string">'触发中'</span>), (<span class="hljs-string">'resolved'</span>, <span class="hljs-string">'已恢复'</span>),
+        (<span class="hljs-string">'acknowledged'</span>, <span class="hljs-string">'已确认'</span>), (<span class="hljs-string">'silenced'</span>, <span class="hljs-string">'已静默'</span>),
+    ]
+
+    rule = models.ForeignKey(AlertRule, on_delete=models.CASCADE, related_name=<span class="hljs-string">'events'</span>)
+    server = models.ForeignKey(<span class="hljs-string">'cmdb.Server'</span>, on_delete=models.CASCADE, null=<span class="hljs-literal">True</span>, related_name=<span class="hljs-string">'alert_events'</span>)
+
+    status = models.CharField(<span class="hljs-string">"状态"</span>, max_length=<span class="hljs-number">20</span>, choices=STATUS_CHOICES, default=<span class="hljs-string">'firing'</span>)
+    severity = models.CharField(<span class="hljs-string">"级别"</span>, max_length=<span class="hljs-number">10</span>)
+    metric_name = models.CharField(<span class="hljs-string">"指标名"</span>, max_length=<span class="hljs-number">50</span>)
+    current_value = models.FloatField(<span class="hljs-string">"当前值"</span>)
+    threshold_value = models.FloatField(<span class="hljs-string">"阈值/基线"</span>, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    message = models.TextField(<span class="hljs-string">"告警消息"</span>, default=<span class="hljs-string">""</span>)
+    detail = models.JSONField(<span class="hljs-string">"详细信息"</span>, default=<span class="hljs-built_in">dict</span>)
+
+    fired_at = models.DateTimeField(<span class="hljs-string">"触发时间"</span>, auto_now_add=<span class="hljs-literal">True</span>)
+    resolved_at = models.DateTimeField(<span class="hljs-string">"恢复时间"</span>, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    acknowledged_at = models.DateTimeField(<span class="hljs-string">"确认时间"</span>, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    acknowledged_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    notification_log = models.JSONField(<span class="hljs-string">"通知记录"</span>, default=<span class="hljs-built_in">list</span>)
+
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Meta</span>:
+        ordering = [<span class="hljs-string">'-fired_at'</span>]
+        verbose_name = <span class="hljs-string">"告警事件"</span>
+        indexes = [
+            models.Index(fields=[<span class="hljs-string">'status'</span>, <span class="hljs-string">'-fired_at'</span>]),
+            models.Index(fields=[<span class="hljs-string">'server'</span>, <span class="hljs-string">'status'</span>]),
+        ]
+
+<span class="hljs-meta">    @property</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">duration</span>(<span class="hljs-params">self</span>):
+        end = <span class="hljs-variable language_">self</span>.resolved_at <span class="hljs-keyword">or</span> timezone.now()
+        <span class="hljs-keyword">return</span> (end - <span class="hljs-variable language_">self</span>.fired_at).total_seconds()
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertSilenceRule</span>(models.Model):
+    name = models.CharField(<span class="hljs-string">"静默名称"</span>, max_length=<span class="hljs-number">200</span>)
+    match_severity = models.CharField(<span class="hljs-string">"匹配级别"</span>, max_length=<span class="hljs-number">10</span>, blank=<span class="hljs-literal">True</span>, default=<span class="hljs-string">''</span>)
+    match_rule_name = models.CharField(<span class="hljs-string">"匹配规则"</span>, max_length=<span class="hljs-number">200</span>, blank=<span class="hljs-literal">True</span>, default=<span class="hljs-string">''</span>)
+    match_server = models.ForeignKey(<span class="hljs-string">'cmdb.Server'</span>, on_delete=models.CASCADE, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    start_time = models.DateTimeField(<span class="hljs-string">"开始时间"</span>)
+    end_time = models.DateTimeField(<span class="hljs-string">"结束时间"</span>)
+    comment = models.TextField(<span class="hljs-string">"备注"</span>, blank=<span class="hljs-literal">True</span>)
+    is_active = models.BooleanField(<span class="hljs-string">"生效中"</span>, default=<span class="hljs-literal">True</span>)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=<span class="hljs-literal">True</span>, blank=<span class="hljs-literal">True</span>)
+    created_at = models.DateTimeField(auto_now_add=<span class="hljs-literal">True</span>)
+
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Meta</span>:
+        verbose_name = <span class="hljs-string">"静默规则"</span>
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">NotificationLog</span>(models.Model):
+    CHANNEL_CHOICES = [(<span class="hljs-string">'dingtalk'</span>,<span class="hljs-string">'钉钉'</span>),(<span class="hljs-string">'wechat'</span>,<span class="hljs-string">'企业微信'</span>),(<span class="hljs-string">'email'</span>,<span class="hljs-string">'邮件'</span>),(<span class="hljs-string">'slack'</span>,<span class="hljs-string">'Slack'</span>),(<span class="hljs-string">'webhook'</span>,<span class="hljs-string">'Webhook'</span>)]
+    STATUS_CHOICES = [(<span class="hljs-string">'sent'</span>,<span class="hljs-string">'已发送'</span>),(<span class="hljs-string">'failed'</span>,<span class="hljs-string">'发送失败'</span>),(<span class="hljs-string">'retrying'</span>,<span class="hljs-string">'重试中'</span>)]
+
+    alert_event = models.ForeignKey(AlertEvent, on_delete=models.CASCADE, related_name=<span class="hljs-string">'notify_logs'</span>)
+    channel = models.CharField(<span class="hljs-string">"渠道"</span>, max_length=<span class="hljs-number">20</span>, choices=CHANNEL_CHOICES)
+    status = models.CharField(<span class="hljs-string">"状态"</span>, max_length=<span class="hljs-number">20</span>, choices=STATUS_CHOICES)
+    recipient = models.JSONField(<span class="hljs-string">"接收者信息"</span>, default=<span class="hljs-built_in">dict</span>)
+    content_summary = models.TextField(<span class="hljs-string">"内容摘要"</span>, blank=<span class="hljs-literal">True</span>)
+    error_message = models.TextField(<span class="hljs-string">"错误信息"</span>, blank=<span class="hljs-literal">True</span>)
+    retry_count = models.PositiveIntegerField(<span class="hljs-string">"重试次数"</span>, default=<span class="hljs-number">0</span>)
+    sent_at = models.DateTimeField(<span class="hljs-string">"发送时间"</span>, auto_now_add=<span class="hljs-literal">True</span>)
+
+    <span class="hljs-keyword">class</span> <span class="hljs-title class_">Meta</span>:
+        ordering = [<span class="hljs-string">'-sent_at'</span>]
+        verbose_name = <span class="hljs-string">"通知记录"</span>
+</div></code></pre>
+<hr>
+<h3 id="step-3%3A-django-admin-%E2%80%94-monitoring%2Fadmin.py" tabindex="-1">Step 3: Django Admin — <code>monitoring/admin.py</code></h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/admin.py</span>
+<span class="hljs-keyword">from</span> django.contrib <span class="hljs-keyword">import</span> admin
+<span class="hljs-keyword">from</span> .models <span class="hljs-keyword">import</span> AlertRule, AlertEvent, AlertSilenceRule, NotificationLog
+
+
+<span class="hljs-meta">@admin.register(<span class="hljs-params">AlertRule</span>)</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertRuleAdmin</span>(admin.ModelAdmin):
+    list_display = [<span class="hljs-string">'name'</span>, <span class="hljs-string">'rule_type'</span>, <span class="hljs-string">'severity'</span>, <span class="hljs-string">'status'</span>, <span class="hljs-string">'metric_name'</span>,
+                    <span class="hljs-string">'trigger_count'</span>, <span class="hljs-string">'last_triggered_at'</span>]
+    list_filter = [<span class="hljs-string">'status'</span>, <span class="hljs-string">'severity'</span>, <span class="hljs-string">'rule_type'</span>]
+    search_fields = [<span class="hljs-string">'name'</span>, <span class="hljs-string">'description'</span>]
+    readonly_fields = [<span class="hljs-string">'trigger_count'</span>, <span class="hljs-string">'last_triggered_at'</span>]
+
+    fieldsets = (
+        (<span class="hljs-string">'基本信息'</span>, {<span class="hljs-string">'fields'</span>: (<span class="hljs-string">'name'</span>,<span class="hljs-string">'description'</span>,<span class="hljs-string">'rule_type'</span>,<span class="hljs-string">'severity'</span>,<span class="hljs-string">'status'</span>)}),
+        (<span class="hljs-string">'目标配置'</span>, {<span class="hljs-string">'fields'</span>: (<span class="hljs-string">'target_all'</span>,<span class="hljs-string">'metric_name'</span>,<span class="hljs-string">'condition_config'</span>)}),
+        (<span class="hljs-string">'评估参数'</span>, {<span class="hljs-string">'fields'</span>: (<span class="hljs-string">'evaluate_interval'</span>,<span class="hljs-string">'lookback_window'</span>,<span class="hljs-string">'cooldown_seconds'</span>,<span class="hljs-string">'max_alerts_per_hour'</span>)}),
+        (<span class="hljs-string">'通知'</span>, {<span class="hljs-string">'fields'</span>: (<span class="hljs-string">'notify_channels'</span>,<span class="hljs-string">'notify_template'</span>)}),
+        (<span class="hljs-string">'元数据'</span>, {<span class="hljs-string">'fields'</span>: (<span class="hljs-string">'created_by'</span>,<span class="hljs-string">'trigger_count'</span>,<span class="hljs-string">'last_triggered_at'</span>,<span class="hljs-string">'created_at'</span>,<span class="hljs-string">'updated_at'</span>),
+                   <span class="hljs-string">'classes'</span>: (<span class="hljs-string">'collapse'</span>,)}),
+    )
+
+
+<span class="hljs-meta">@admin.register(<span class="hljs-params">AlertEvent</span>)</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertEventAdmin</span>(admin.ModelAdmin):
+    list_display = [<span class="hljs-string">'id'</span>, <span class="hljs-string">'rule'</span>, <span class="hljs-string">'server'</span>, <span class="hljs-string">'severity'</span>, <span class="hljs-string">'status'</span>, <span class="hljs-string">'current_value'</span>, <span class="hljs-string">'fired_at'</span>]
+    list_filter = [<span class="hljs-string">'status'</span>, <span class="hljs-string">'severity'</span>]
+    search_fields = [<span class="hljs-string">'message'</span>, <span class="hljs-string">'server__hostname'</span>, <span class="hljs-string">'rule__name'</span>]
+    readonly_fields = [<span class="hljs-string">'fired_at'</span>, <span class="hljs-string">'notification_log'</span>]
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">has_add_permission</span>(<span class="hljs-params">self, request</span>): <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>
+
+
+<span class="hljs-meta">@admin.register(<span class="hljs-params">AlertSilenceRule</span>)</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AlertSilenceRuleAdmin</span>(admin.ModelAdmin):
+    list_display = [<span class="hljs-string">'name'</span>, <span class="hljs-string">'is_active'</span>, <span class="hljs-string">'start_time'</span>, <span class="hljs-string">'end_time'</span>]
+
+
+<span class="hljs-meta">@admin.register(<span class="hljs-params">NotificationLog</span>)</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">NotificationLogAdmin</span>(admin.ModelAdmin):
+    list_display = [<span class="hljs-string">'channel'</span>, <span class="hljs-string">'status'</span>, <span class="hljs-string">'alert_event'</span>, <span class="hljs-string">'retry_count'</span>, <span class="hljs-string">'sent_at'</span>]
+    list_filter = [<span class="hljs-string">'channel'</span>, <span class="hljs-string">'status'</span>]
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">has_add_permission</span>(<span class="hljs-params">self, request</span>): <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>
+</div></code></pre>
+<hr>
+<h3 id="step-4%3A-%E8%A7%84%E5%88%99%E5%BC%95%E6%93%8E-%E2%80%94-monitoring%2Fengine%2Frule_evaluator.py" tabindex="-1">Step 4: 规则引擎 — <code>monitoring/engine/rule_evaluator.py</code></h3>
+<h4 id="4.1-%E5%88%9B%E5%BB%BA-monitoring%2Fengine%2F__init__.py-(%E7%A9%BA%E6%96%87%E4%BB%B6)" tabindex="-1">4.1 创建 <code>monitoring/engine/__init__.py</code> (空文件)</h4>
+<h4 id="4.2-%E5%88%9B%E5%BB%BA-monitoring%2Fengine%2Frule_evaluator.py" tabindex="-1">4.2 创建 <code>monitoring/engine/rule_evaluator.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/engine/rule_evaluator.py</span>
+<span class="hljs-keyword">import</span> logging
+<span class="hljs-keyword">import</span> statistics
+<span class="hljs-keyword">from</span> datetime <span class="hljs-keyword">import</span> timedelta
+<span class="hljs-keyword">from</span> django.utils <span class="hljs-keyword">import</span> timezone
+<span class="hljs-keyword">from</span> django.db <span class="hljs-keyword">import</span> models <span class="hljs-keyword">as</span> dj_models
+<span class="hljs-keyword">from</span> monitoring.models <span class="hljs-keyword">import</span> AlertRule, AlertEvent, AlertSilenceRule
+
+logger = logging.getLogger(__name__)
+
+METRIC_FIELD_MAP = {
+    <span class="hljs-string">'cpu_usage'</span>:<span class="hljs-string">'cpu_usage'</span>,<span class="hljs-string">'mem_usage'</span>:<span class="hljs-string">'mem_usage'</span>,<span class="hljs-string">'disk_usage'</span>:<span class="hljs-string">'disk_usage'</span>,
+    <span class="hljs-string">'load_1min'</span>:<span class="hljs-string">'load_1min'</span>,<span class="hljs-string">'net_in'</span>:<span class="hljs-string">'net_in'</span>,<span class="hljs-string">'net_out'</span>:<span class="hljs-string">'net_out'</span>,
+    <span class="hljs-string">'disk_read_rate'</span>:<span class="hljs-string">'disk_read_rate'</span>,<span class="hljs-string">'disk_write_rate'</span>:<span class="hljs-string">'disk_write_rate'</span>,
+}
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">RuleEvaluator</span>:
+    HANDLER_MAP = {}
+
+<span class="hljs-meta">    @classmethod</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">register</span>(<span class="hljs-params">cls, rule_type</span>):
+        <span class="hljs-keyword">def</span> <span class="hljs-title function_">decorator</span>(<span class="hljs-params">func</span>):
+            cls.HANDLER_MAP[rule_type] = func
+            <span class="hljs-keyword">return</span> func
+        <span class="hljs-keyword">return</span> decorator
+
+<span class="hljs-meta">    @classmethod</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">evaluate_all</span>(<span class="hljs-params">cls</span>):
+        results = {<span class="hljs-string">'evaluated'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'fired'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'errors'</span>:[]}
+        <span class="hljs-keyword">for</span> rule <span class="hljs-keyword">in</span> AlertRule.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'enabled'</span>):
+            <span class="hljs-keyword">try</span>:
+                evaluator = cls(rule)
+                fired, _ = evaluator.evaluate()
+                results[<span class="hljs-string">'evaluated'</span>] += <span class="hljs-number">1</span>
+                <span class="hljs-keyword">if</span> fired: results[<span class="hljs-string">'fired'</span>] += <span class="hljs-number">1</span>
+            <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+                logger.error(<span class="hljs-string">f"[RuleEngine] 规则<span class="hljs-subst">{rule.<span class="hljs-built_in">id</span>}</span>异常: <span class="hljs-subst">{e}</span>"</span>)
+                results[<span class="hljs-string">'errors'</span>].append({<span class="hljs-string">'rule_id'</span>:rule.<span class="hljs-built_in">id</span>,<span class="hljs-string">'error'</span>:<span class="hljs-built_in">str</span>(e)})
+        <span class="hljs-keyword">return</span> results
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self, rule</span>):
+        <span class="hljs-variable language_">self</span>.rule = rule
+        <span class="hljs-variable language_">self</span>.condition = rule.condition_config <span class="hljs-keyword">or</span> {}
+        <span class="hljs-variable language_">self</span>.handler = <span class="hljs-variable language_">self</span>.HANDLER_MAP.get(rule.rule_type)
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">evaluate</span>(<span class="hljs-params">self, server_id=<span class="hljs-literal">None</span></span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> <span class="hljs-variable language_">self</span>.handler:
+            <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>, {<span class="hljs-string">'reason'</span>: <span class="hljs-string">f'unknown_rule_type:<span class="hljs-subst">{self.rule.rule_type}</span>'</span>}
+        servers = <span class="hljs-variable language_">self</span>._get_targets(server_id)
+        any_fired = <span class="hljs-literal">False</span>
+        <span class="hljs-keyword">for</span> server <span class="hljs-keyword">in</span> servers:
+            <span class="hljs-keyword">try</span>:
+                result = <span class="hljs-variable language_">self</span>.handler(<span class="hljs-variable language_">self</span>, server)
+                <span class="hljs-keyword">if</span> result.get(<span class="hljs-string">'triggered'</span>):
+                    <span class="hljs-variable language_">self</span>._fire(server, result)
+                    any_fired = <span class="hljs-literal">True</span>
+            <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+                logger.error(<span class="hljs-string">f"[RuleEngine] <span class="hljs-subst">{server.hostname}</span>: <span class="hljs-subst">{e}</span>"</span>)
+        <span class="hljs-keyword">return</span> any_fired, {}
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_get_targets</span>(<span class="hljs-params">self, sid</span>):
+        <span class="hljs-keyword">from</span> cmdb.models <span class="hljs-keyword">import</span> Server
+        q = Server.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'Running'</span>)
+        <span class="hljs-keyword">if</span> sid: q = q.<span class="hljs-built_in">filter</span>(<span class="hljs-built_in">id</span>=sid)
+        <span class="hljs-keyword">elif</span> <span class="hljs-keyword">not</span> <span class="hljs-variable language_">self</span>.rule.target_all:
+            tids = <span class="hljs-built_in">list</span>(<span class="hljs-variable language_">self</span>.rule.target_servers.values_list(<span class="hljs-string">'id'</span>,flat=<span class="hljs-literal">True</span>))
+            gids = <span class="hljs-built_in">list</span>(<span class="hljs-variable language_">self</span>.rule.target_groups.values_list(<span class="hljs-string">'id'</span>,flat=<span class="hljs-literal">True</span>))
+            <span class="hljs-keyword">if</span> tids: q = q.<span class="hljs-built_in">filter</span>(id__in=tids)
+            <span class="hljs-keyword">if</span> gids: q = q.<span class="hljs-built_in">filter</span>(group_id__in=gids)
+        <span class="hljs-keyword">return</span> q.distinct()
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_latest</span>(<span class="hljs-params">self, server</span>):
+        <span class="hljs-keyword">from</span> cmdb.models <span class="hljs-keyword">import</span> ServerMetric
+        field = METRIC_FIELD_MAP.get(<span class="hljs-variable language_">self</span>.rule.metric_name,<span class="hljs-string">'cpu_usage'</span>)
+        <span class="hljs-keyword">try</span>:
+            m = ServerMetric.objects.<span class="hljs-built_in">filter</span>(server=server).latest(<span class="hljs-string">'created_at'</span>)
+            <span class="hljs-keyword">return</span> <span class="hljs-built_in">getattr</span>(m,field), m
+        <span class="hljs-keyword">except</span> Exception:
+            <span class="hljs-keyword">return</span> <span class="hljs-literal">None</span>,<span class="hljs-literal">None</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_series</span>(<span class="hljs-params">self, server, limit=<span class="hljs-number">30</span></span>):
+        <span class="hljs-keyword">from</span> cmdb.models <span class="hljs-keyword">import</span> ServerMetric
+        field = METRIC_FIELD_MAP.get(<span class="hljs-variable language_">self</span>.rule.metric_name,<span class="hljs-string">'cpu_usage'</span>)
+        qs = ServerMetric.objects.<span class="hljs-built_in">filter</span>(server=server).order_by(<span class="hljs-string">'-created_at'</span>)[:limit]
+        <span class="hljs-keyword">return</span> [<span class="hljs-built_in">getattr</span>(m,field) <span class="hljs-keyword">for</span> m <span class="hljs-keyword">in</span> <span class="hljs-built_in">reversed</span>(qs)]
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_fire</span>(<span class="hljs-params">self, server, result</span>):
+        <span class="hljs-comment"># 冷却检查</span>
+        <span class="hljs-keyword">if</span> AlertEvent.objects.<span class="hljs-built_in">filter</span>(rule=<span class="hljs-variable language_">self</span>.rule,server=server,status=<span class="hljs-string">'firing'</span>,
+            fired_at__gte=timezone.now()-timedelta(seconds=<span class="hljs-variable language_">self</span>.rule.cooldown_seconds)).exists():
+            <span class="hljs-keyword">return</span>
+        <span class="hljs-comment"># 静默检查</span>
+        now = timezone.now()
+        <span class="hljs-keyword">if</span> AlertSilenceRule.objects.<span class="hljs-built_in">filter</span>(is_active=<span class="hljs-literal">True</span>,start_time__lte=now,end_time__gte=now
+            ).<span class="hljs-built_in">filter</span>(dj_models.Q(match_server=server)|dj_models.Q(match_server__isnull=<span class="hljs-literal">True</span>)
+            ).<span class="hljs-built_in">filter</span>(dj_models.Q(match_severity=<span class="hljs-string">''</span>)|dj_models.Q(match_severity=<span class="hljs-variable language_">self</span>.rule.severity)
+            ).exists():
+            <span class="hljs-keyword">return</span>
+        <span class="hljs-comment"># 频率限制</span>
+        hour_ago = now - timedelta(hours=<span class="hljs-number">1</span>)
+        <span class="hljs-keyword">if</span> AlertEvent.objects.<span class="hljs-built_in">filter</span>(rule=<span class="hljs-variable language_">self</span>.rule,server=server,fired_at__gte=hour_ago
+            ).count() &gt;= <span class="hljs-variable language_">self</span>.rule.max_alerts_per_hour:
+            <span class="hljs-keyword">return</span>
+
+        event = AlertEvent.objects.create(
+            rule=<span class="hljs-variable language_">self</span>.rule, server=server, severity=<span class="hljs-variable language_">self</span>.rule.severity,
+            metric_name=<span class="hljs-variable language_">self</span>.rule.metric_name,
+            current_value=result.get(<span class="hljs-string">'current_value'</span>,<span class="hljs-number">0</span>),
+            threshold_value=result.get(<span class="hljs-string">'threshold'</span>) <span class="hljs-keyword">or</span> result.get(<span class="hljs-string">'baseline'</span>),
+            message=<span class="hljs-variable language_">self</span>._msg(server,result), detail=result,
+        )
+        AlertRule.objects.<span class="hljs-built_in">filter</span>(<span class="hljs-built_in">id</span>=<span class="hljs-variable language_">self</span>.rule.<span class="hljs-built_in">id</span>).update(
+            last_triggered_at=now, trigger_count=dj_models.F(<span class="hljs-string">'trigger_count'</span>)+<span class="hljs-number">1</span>)
+        <span class="hljs-keyword">from</span> monitoring.notification.channel_manager <span class="hljs-keyword">import</span> send_alert_notifications
+        send_alert_notifications.delay(event.<span class="hljs-built_in">id</span>)
+        logger.warning(<span class="hljs-string">f"ALERT [<span class="hljs-subst">{self.rule.severity}</span>] <span class="hljs-subst">{self.rule.name}</span> -&gt; <span class="hljs-subst">{server.hostname}</span>"</span>)
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_msg</span>(<span class="hljs-params">self, server, r</span>):
+        t = {<span class="hljs-string">'threshold'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> <span class="hljs-subst">{self.rule.metric_name}</span>=<span class="hljs-subst">{r.get(<span class="hljs-string">'current_value'</span>,<span class="hljs-string">'?'</span>)}</span> "</span>
+              <span class="hljs-string">f"<span class="hljs-subst">{self.condition.get(<span class="hljs-string">'operator'</span>,<span class="hljs-string">'&gt;'</span>)}</span> <span class="hljs-subst">{self.condition.get(<span class="hljs-string">'value'</span>,<span class="hljs-string">'?'</span>)}</span>"</span>,
+             <span class="hljs-string">'baseline'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> <span class="hljs-subst">{self.rule.metric_name}</span>=<span class="hljs-subst">{r.get(<span class="hljs-string">'current_value'</span>,<span class="hljs-string">'?'</span>)}</span> 超基线"</span>,
+             <span class="hljs-string">'trend'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> <span class="hljs-subst">{self.rule.metric_name}</span> 持续<span class="hljs-subst">{self.condition.get(<span class="hljs-string">'direction'</span>,<span class="hljs-string">'up'</span>)}</span>趋势"</span>,
+             <span class="hljs-string">'composite'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> 复合条件触发"</span>,
+             <span class="hljs-string">'absence'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> <span class="hljs-subst">{r.get(<span class="hljs-string">'last_report_minutes_ago'</span>,<span class="hljs-string">'?'</span>)}</span>分钟未上报"</span>,
+             <span class="hljs-string">'anomaly'</span>:<span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> 异常(分数=<span class="hljs-subst">{r.get(<span class="hljs-string">'anomaly_score'</span>,<span class="hljs-string">'?'</span>)}</span>)"</span>}
+        <span class="hljs-keyword">return</span> t.get(<span class="hljs-variable language_">self</span>.rule.rule_type, <span class="hljs-string">f"<span class="hljs-subst">{server.hostname}</span> 告警"</span>)
+
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'threshold'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_threshold</span>(<span class="hljs-params">self, s</span>):
+    val,_ = <span class="hljs-variable language_">self</span>._latest(s)
+    <span class="hljs-keyword">if</span> val <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'reason'</span>:<span class="hljs-string">'no_data'</span>}
+    op = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'operator'</span>,<span class="hljs-string">'gt'</span>)
+    thr = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'value'</span>,<span class="hljs-number">0</span>)
+    ok = val &gt; thr <span class="hljs-keyword">if</span> op==<span class="hljs-string">'gt'</span> <span class="hljs-keyword">else</span> val &gt;= thr <span class="hljs-keyword">if</span> op==<span class="hljs-string">'gte'</span> <span class="hljs-keyword">else</span> val &lt; thr <span class="hljs-keyword">if</span> op==<span class="hljs-string">'lt'</span> <span class="hljs-keyword">else</span> val &lt;= thr
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:ok,<span class="hljs-string">'current_value'</span>:<span class="hljs-built_in">round</span>(val,<span class="hljs-number">2</span>),<span class="hljs-string">'threshold'</span>:thr}
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'baseline'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_baseline</span>(<span class="hljs-params">self, s</span>):
+    hrs = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'lookback_hours'</span>,<span class="hljs-number">168</span>)
+    mul = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'multiplier'</span>,<span class="hljs-number">1.5</span>)
+    field = METRIC_FIELD_MAP.get(<span class="hljs-variable language_">self</span>.rule.metric_name,<span class="hljs-string">'cpu_usage'</span>)
+    <span class="hljs-keyword">from</span> cmdb.models <span class="hljs-keyword">import</span> ServerMetric
+    qs = ServerMetric.objects.<span class="hljs-built_in">filter</span>(server=s,
+        created_at__range=(timezone.now()-timedelta(hours=hrs),timezone.now()))
+    vals = [<span class="hljs-built_in">getattr</span>(m,field) <span class="hljs-keyword">for</span> m <span class="hljs-keyword">in</span> qs]
+    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vals)&lt;<span class="hljs-number">10</span>: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'reason'</span>:<span class="hljs-string">f'history(<span class="hljs-subst">{<span class="hljs-built_in">len</span>(vals)}</span>)'</span>}
+    base = statistics.mean(vals)*mul
+    cv,_ = <span class="hljs-variable language_">self</span>._latest(s)
+    <span class="hljs-keyword">if</span> cv <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">False</span>}
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:cv&gt;base,<span class="hljs-string">'current_value'</span>:<span class="hljs-built_in">round</span>(cv,<span class="hljs-number">2</span>),<span class="hljs-string">'baseline'</span>:<span class="hljs-built_in">round</span>(base,<span class="hljs-number">2</span>)}
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'trend'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_trend</span>(<span class="hljs-params">self, s</span>):
+    w = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'window'</span>,<span class="hljs-number">5</span>)
+    d = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'direction'</span>,<span class="hljs-string">'up'</span>)
+    ct = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'change_threshold'</span>,<span class="hljs-number">1</span>)
+    vals = <span class="hljs-variable language_">self</span>._series(s,w+<span class="hljs-number">1</span>)
+    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vals)&lt;w+<span class="hljs-number">1</span>: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">False</span>}
+    changes = [vals[i]-vals[i-<span class="hljs-number">1</span>] <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-number">1</span>,<span class="hljs-built_in">len</span>(vals))]
+    ok = <span class="hljs-built_in">all</span>(c&gt;ct <span class="hljs-keyword">for</span> c <span class="hljs-keyword">in</span> changes) <span class="hljs-keyword">if</span> d==<span class="hljs-string">'up'</span> <span class="hljs-keyword">else</span> <span class="hljs-built_in">all</span>(c&lt;-ct <span class="hljs-keyword">for</span> c <span class="hljs-keyword">in</span> changes)
+    slope = (vals[-<span class="hljs-number">1</span>]-vals[<span class="hljs-number">0</span>])/<span class="hljs-built_in">len</span>(vals) <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vals)&gt;<span class="hljs-number">1</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-built_in">bool</span>(ok),<span class="hljs-string">'direction'</span>:d,<span class="hljs-string">'slope'</span>:<span class="hljs-built_in">round</span>(slope,<span class="hljs-number">4</span>)}
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'composite'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_composite</span>(<span class="hljs-params">self, s</span>):
+    logic = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'logic'</span>,<span class="hljs-string">'AND'</span>)
+    subs = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'conditions'</span>,[])
+    rlist = []
+    <span class="hljs-keyword">for</span> sub <span class="hljs-keyword">in</span> subs:
+        cv,_ = <span class="hljs-variable language_">self</span>._latest(s)
+        <span class="hljs-keyword">if</span> cv <span class="hljs-keyword">is</span> <span class="hljs-literal">None</span>: rlist.append(<span class="hljs-literal">False</span>); <span class="hljs-keyword">continue</span>
+        op = sub.get(<span class="hljs-string">'operator'</span>,<span class="hljs-string">'gt'</span>); v = sub.get(<span class="hljs-string">'value'</span>,<span class="hljs-number">0</span>)
+        rlist.append(cv&gt;v <span class="hljs-keyword">if</span> op==<span class="hljs-string">'gt'</span> <span class="hljs-keyword">else</span> cv&gt;=v <span class="hljs-keyword">if</span> op==<span class="hljs-string">'gte'</span> <span class="hljs-keyword">else</span> cv&lt;v <span class="hljs-keyword">if</span> op==<span class="hljs-string">'lt'</span> <span class="hljs-keyword">else</span> cv&lt;=v)
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-built_in">all</span>(rlist) <span class="hljs-keyword">if</span> logic==<span class="hljs-string">'AND'</span> <span class="hljs-keyword">else</span> <span class="hljs-built_in">any</span>(rlist),<span class="hljs-string">'sub_results'</span>:rlist}
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'absence'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_absence</span>(<span class="hljs-params">self, s</span>):
+    mins = <span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'absent_minutes'</span>,<span class="hljs-number">5</span>)
+    _,obj = <span class="hljs-variable language_">self</span>._latest(s)
+    <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> obj: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">True</span>}
+    elapsed = (timezone.now()-obj.created_at).total_seconds()/<span class="hljs-number">60</span>
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:elapsed&gt;mins,<span class="hljs-string">'last_report_minutes_ago'</span>:<span class="hljs-built_in">round</span>(elapsed,<span class="hljs-number">1</span>)}
+
+<span class="hljs-meta">@RuleEvaluator.register(<span class="hljs-params"><span class="hljs-string">'anomaly'</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">_eval_anomaly</span>(<span class="hljs-params">self, s</span>):
+    <span class="hljs-keyword">from</span> monitoring.anomaly_detector <span class="hljs-keyword">import</span> AnomalyDetector
+    det = AnomalyDetector(method=<span class="hljs-variable language_">self</span>.condition.get(<span class="hljs-string">'method'</span>,<span class="hljs-string">'auto'</span>))
+    vals = <span class="hljs-variable language_">self</span>._series(s,<span class="hljs-number">30</span>)
+    <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(vals)&lt;<span class="hljs-number">5</span>: <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:<span class="hljs-literal">False</span>}
+    ia,score,reason = det.detect(vals)
+    <span class="hljs-keyword">return</span> {<span class="hljs-string">'triggered'</span>:ia,<span class="hljs-string">'anomaly_score'</span>:<span class="hljs-built_in">round</span>(score,<span class="hljs-number">4</span>),<span class="hljs-string">'method_used'</span>:det.method_used,<span class="hljs-string">'reason'</span>:reason}
+</div></code></pre>
+<hr>
+<h3 id="step-5%3A-%E5%BC%82%E5%B8%B8%E6%A3%80%E6%B5%8B%E7%AE%97%E6%B3%95%E5%BA%93-%E2%80%94-monitoring%2Fanomaly_detector.py" tabindex="-1">Step 5: 异常检测算法库 — <code>monitoring/anomaly_detector.py</code></h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/anomaly_detector.py</span>
+<span class="hljs-keyword">import</span> statistics
+<span class="hljs-keyword">from</span> dataclasses <span class="hljs-keyword">import</span> dataclass
+<span class="hljs-keyword">from</span> typing <span class="hljs-keyword">import</span> <span class="hljs-type">List</span>,<span class="hljs-type">Tuple</span>
+
+<span class="hljs-meta">@dataclass</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AnomalyResult</span>:
+    is_anomaly: <span class="hljs-built_in">bool</span>; score: <span class="hljs-built_in">float</span>; method: <span class="hljs-built_in">str</span>; reason: <span class="hljs-built_in">str</span>; details: <span class="hljs-built_in">dict</span>=<span class="hljs-literal">None</span>
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">BaseDetector</span>:
+    method_name=<span class="hljs-string">"base"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self, series</span>): <span class="hljs-keyword">raise</span> NotImplementedError
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">ZScoreDetector</span>(<span class="hljs-title class_ inherited__">BaseDetector</span>):
+    method_name=<span class="hljs-string">"zscore"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,threshold=<span class="hljs-number">3.0</span>,window=<span class="hljs-number">30</span></span>):
+        <span class="hljs-variable language_">self</span>.threshold=threshold; <span class="hljs-variable language_">self</span>.window=window
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,series</span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(series)&lt;<span class="hljs-variable language_">self</span>.window: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"insufficient_data"</span>)
+        hist=series[-(<span class="hljs-variable language_">self</span>.window+<span class="hljs-number">1</span>):-<span class="hljs-number">1</span>]
+        mu=statistics.mean(hist); sd=statistics.stdev(hist) <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(hist)&gt;<span class="hljs-number">1</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>
+        <span class="hljs-keyword">if</span> sd==<span class="hljs-number">0</span>: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"zero_std"</span>)
+        z=<span class="hljs-built_in">abs</span>((series[-<span class="hljs-number">1</span>]-mu)/sd); ok=z&gt;<span class="hljs-variable language_">self</span>.threshold; sc=<span class="hljs-built_in">min</span>(<span class="hljs-number">1.0</span>,z/(<span class="hljs-variable language_">self</span>.threshold*<span class="hljs-number">2</span>))
+        <span class="hljs-keyword">return</span> AnomalyResult(ok,sc,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">f"Z=<span class="hljs-subst">{z:<span class="hljs-number">.2</span>f}</span>(μ=<span class="hljs-subst">{mu:<span class="hljs-number">.2</span>f}</span>,σ=<span class="hljs-subst">{sd:<span class="hljs-number">.2</span>f}</span>)"</span>,
+                              {<span class="hljs-string">'zscore'</span>:<span class="hljs-built_in">round</span>(z,<span class="hljs-number">3</span>),<span class="hljs-string">'mean'</span>:<span class="hljs-built_in">round</span>(mu,<span class="hljs-number">3</span>),<span class="hljs-string">'std'</span>:<span class="hljs-built_in">round</span>(sd,<span class="hljs-number">3</span>)})
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">IQRDetector</span>(<span class="hljs-title class_ inherited__">BaseDetector</span>):
+    method_name=<span class="hljs-string">"iqr"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,k=<span class="hljs-number">1.5</span>,window=<span class="hljs-number">30</span></span>):
+        <span class="hljs-variable language_">self</span>.k=k; <span class="hljs-variable language_">self</span>.window=window
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,series</span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(series)&lt;<span class="hljs-variable language_">self</span>.window: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"insufficient_data"</span>)
+        h=<span class="hljs-built_in">sorted</span>(series[-(<span class="hljs-variable language_">self</span>.window+<span class="hljs-number">1</span>):-<span class="hljs-number">1</span>]); n=<span class="hljs-built_in">len</span>(h)
+        q1=h[n//<span class="hljs-number">4</span>]; q3=h[<span class="hljs-number">3</span>*n//<span class="hljs-number">4</span>]; iqr=q3-q1
+        <span class="hljs-keyword">if</span> iqr==<span class="hljs-number">0</span>: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"zero_iqr"</span>)
+        lo=q1-<span class="hljs-variable language_">self</span>.k*iqr; hi=q3+<span class="hljs-variable language_">self</span>.k*iqr; latest=series[-<span class="hljs-number">1</span>]
+        <span class="hljs-keyword">if</span> latest&lt;lo:
+            sc=<span class="hljs-built_in">min</span>(<span class="hljs-number">1.0</span>,(lo-latest)/iqr)
+            <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">True</span>,sc,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">f"&lt;IQR下界<span class="hljs-subst">{lo:<span class="hljs-number">.2</span>f}</span>"</span>,{<span class="hljs-string">'direction'</span>:<span class="hljs-string">'low'</span>})
+        <span class="hljs-keyword">if</span> latest&gt;hi:
+            sc=<span class="hljs-built_in">min</span>(<span class="hljs-number">1.0</span>,(latest-hi)/iqr)
+            <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">True</span>,sc,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">f"&gt;IQR上界<span class="hljs-subst">{hi:<span class="hljs-number">.2</span>f}</span>"</span>,{<span class="hljs-string">'direction'</span>:<span class="hljs-string">'high'</span>})
+        <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"normal"</span>)
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">MovingAvgDetector</span>(<span class="hljs-title class_ inherited__">BaseDetector</span>):
+    method_name=<span class="hljs-string">"moving_avg"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,mw=<span class="hljs-number">10</span>,tf=<span class="hljs-number">2.0</span></span>):
+        <span class="hljs-variable language_">self</span>.mw=mw; <span class="hljs-variable language_">self</span>.tf=tf
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,series</span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(series)&lt;<span class="hljs-variable language_">self</span>.mw+<span class="hljs-number">1</span>: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"insufficient_data"</span>)
+        mav=[]
+        <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-variable language_">self</span>.mw,<span class="hljs-built_in">len</span>(series)):
+            mav.append(statistics.mean(series[i-<span class="hljs-variable language_">self</span>.mw:i]))
+        actual=series[-<span class="hljs-number">1</span>]; ma=mav[-<span class="hljs-number">1</span>]
+        res=[series[<span class="hljs-variable language_">self</span>.mw+i]-mav[i] <span class="hljs-keyword">for</span> i <span class="hljs-keyword">in</span> <span class="hljs-built_in">range</span>(<span class="hljs-built_in">len</span>(mav))]
+        rsd=statistics.stdev(res) <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(res)&gt;<span class="hljs-number">1</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>
+        dev=<span class="hljs-built_in">abs</span>(actual-ma); th=<span class="hljs-variable language_">self</span>.tf*rsd <span class="hljs-keyword">if</span> rsd&gt;<span class="hljs-number">0</span> <span class="hljs-keyword">else</span> ma*<span class="hljs-number">0.1</span>
+        dir_=<span class="hljs-string">'high'</span> <span class="hljs-keyword">if</span> actual&gt;ma <span class="hljs-keyword">else</span> <span class="hljs-string">'low'</span>
+        <span class="hljs-keyword">return</span> AnomalyResult(dev&gt;th,<span class="hljs-built_in">min</span>(<span class="hljs-number">1.0</span>,dev/(th*<span class="hljs-number">2</span>))<span class="hljs-keyword">if</span> th&gt;<span class="hljs-number">0</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,
+            <span class="hljs-string">f"偏差=<span class="hljs-subst">{dev:<span class="hljs-number">.2</span>f}</span>"</span>,{<span class="hljs-string">'ma'</span>:<span class="hljs-built_in">round</span>(ma,<span class="hljs-number">3</span>),<span class="hljs-string">'dev'</span>:<span class="hljs-built_in">round</span>(dev,<span class="hljs-number">3</span>),<span class="hljs-string">'direction'</span>:dir_})
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">RateOfChangeDetector</span>(<span class="hljs-title class_ inherited__">BaseDetector</span>):
+    method_name=<span class="hljs-string">"rate_of_change"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,max_pct=<span class="hljs-number">50.0</span></span>):
+        <span class="hljs-variable language_">self</span>.max_pct=max_pct
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,series</span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(series)&lt;<span class="hljs-number">2</span>: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"insufficient_data"</span>)
+        prev=series[-<span class="hljs-number">2</span>]; curr=series[-<span class="hljs-number">1</span>]
+        <span class="hljs-keyword">if</span> prev==<span class="hljs-number">0</span>: <span class="hljs-keyword">return</span> AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">"zero_base"</span>)
+        pct=<span class="hljs-built_in">abs</span>((curr-prev)/prev*<span class="hljs-number">100</span>); ok=pct&gt;<span class="hljs-variable language_">self</span>.max_pct
+        sc=<span class="hljs-built_in">min</span>(<span class="hljs-number">1.0</span>,pct/(<span class="hljs-variable language_">self</span>.max_pct*<span class="hljs-number">2</span>)); d=<span class="hljs-string">'spike_up'</span> <span class="hljs-keyword">if</span> curr&gt;prev <span class="hljs-keyword">else</span> <span class="hljs-string">'drop_down'</span>
+        <span class="hljs-keyword">return</span> AnomalyResult(ok,sc,<span class="hljs-variable language_">self</span>.method_name,<span class="hljs-string">f"变化率=<span class="hljs-subst">{pct:<span class="hljs-number">.1</span>f}</span>%"</span>,{<span class="hljs-string">'pct'</span>:<span class="hljs-built_in">round</span>(pct,<span class="hljs-number">2</span>),<span class="hljs-string">'direction'</span>:d})
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">CompositeAnomalyDetector</span>(<span class="hljs-title class_ inherited__">BaseDetector</span>):
+    method_name=<span class="hljs-string">"composite"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,detectors=<span class="hljs-literal">None</span>,vote_thr=<span class="hljs-number">0.5</span></span>):
+        <span class="hljs-variable language_">self</span>.detectors=detectors <span class="hljs-keyword">or</span> [
+            ZScoreDetector(threshold=<span class="hljs-number">2.5</span>), IQRDetector(k=<span class="hljs-number">1.5</span>),
+            MovingAvgDetector(), RateOfChangeDetector()]
+        <span class="hljs-variable language_">self</span>.vote_thr=vote_thr
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,series</span>):
+        results=[]
+        <span class="hljs-keyword">for</span> d <span class="hljs-keyword">in</span> <span class="hljs-variable language_">self</span>.detectors:
+            <span class="hljs-keyword">try</span>: results.append(d.detect(series))
+            <span class="hljs-keyword">except</span>: results.append(AnomalyResult(<span class="hljs-literal">False</span>,<span class="hljs-number">0</span>,d.method_name,<span class="hljs-string">"error"</span>))
+        ac=<span class="hljs-built_in">sum</span>(<span class="hljs-number">1</span> <span class="hljs-keyword">for</span> r <span class="hljs-keyword">in</span> results <span class="hljs-keyword">if</span> r.is_anomaly); tot=<span class="hljs-built_in">len</span>(results)
+        vr=ac/tot <span class="hljs-keyword">if</span> tot&gt;<span class="hljs-number">0</span> <span class="hljs-keyword">else</span> <span class="hljs-number">0</span>
+        drs=[{<span class="hljs-string">"method"</span>:r.method,<span class="hljs-string">"anomaly"</span>:r.is_anomaly,<span class="hljs-string">"score"</span>:<span class="hljs-built_in">round</span>(r.score,<span class="hljs-number">3</span>)} <span class="hljs-keyword">for</span> r <span class="hljs-keyword">in</span> results]
+        <span class="hljs-keyword">return</span> AnomalyResult(vr&gt;=<span class="hljs-variable language_">self</span>.vote_thr,<span class="hljs-built_in">round</span>(vr,<span class="hljs-number">4</span>),<span class="hljs-variable language_">self</span>.method_name,
+            <span class="hljs-string">f"<span class="hljs-subst">{ac}</span>/<span class="hljs-subst">{tot}</span>算法判定异常"</span>,{<span class="hljs-string">'vote_ratio'</span>:<span class="hljs-built_in">round</span>(vr,<span class="hljs-number">3</span>),<span class="hljs-string">'results'</span>:drs})
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">AnomalyDetector</span>:
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,method=<span class="hljs-string">'auto'</span></span>):
+        <span class="hljs-variable language_">self</span>.method=method; <span class="hljs-variable language_">self</span>.method_used=<span class="hljs-literal">None</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">detect</span>(<span class="hljs-params">self,values</span>):
+        <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(values)&lt;<span class="hljs-number">5</span>: <span class="hljs-keyword">return</span> <span class="hljs-literal">False</span>,<span class="hljs-number">0.0</span>,<span class="hljs-string">"数据不足"</span>
+        m={<span class="hljs-string">'zscore'</span>:ZScoreDetector(),<span class="hljs-string">'iqr'</span>:IQRDetector(),
+           <span class="hljs-string">'moving_avg'</span>:MovingAvgDetector(),<span class="hljs-string">'rate_of_change'</span>:RateOfChangeDetector(),
+           <span class="hljs-string">'composite'</span>:CompositeAnomalyDetector()}
+        det=m.get(<span class="hljs-variable language_">self</span>.method)
+        <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> det:
+            <span class="hljs-keyword">if</span> <span class="hljs-built_in">len</span>(values)&lt;<span class="hljs-number">20</span>: det=ZScoreDetector(threshold=<span class="hljs-number">2.5</span>)
+            <span class="hljs-keyword">else</span>: det=CompositeAnomalyDetector(vote_thr=<span class="hljs-number">0.6</span>)
+        <span class="hljs-variable language_">self</span>.method_used=det.method_name
+        r=det.detect(values)
+        <span class="hljs-keyword">return</span> r.is_anomaly,r.score,r.reason
+</div></code></pre>
+<hr>
+<h3 id="step-6%3A-%E5%A4%9A%E6%B8%A0%E9%81%93%E9%80%9A%E7%9F%A5%E4%B8%AD%E5%BF%83-%E2%80%94-monitoring%2Fnotification%2Fchannel_manager.py" tabindex="-1">Step 6: 多渠道通知中心 — <code>monitoring/notification/channel_manager.py</code></h3>
+<h4 id="6.1-%E5%88%9B%E5%BB%BA-monitoring%2Fnotification%2F__init__.py-(%E7%A9%BA%E6%96%87%E4%BB%B6)" tabindex="-1">6.1 创建 <code>monitoring/notification/__init__.py</code> (空文件)</h4>
+<h4 id="6.2-%E5%88%9B%E5%BB%BA-monitoring%2Fnotification%2Fchannel_manager.py" tabindex="-1">6.2 创建 <code>monitoring/notification/channel_manager.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/notification/channel_manager.py</span>
+<span class="hljs-keyword">import</span> json,hmac,hashlib,base64,time,logging,urllib.parse
+<span class="hljs-keyword">from</span> datetime <span class="hljs-keyword">import</span> datetime
+<span class="hljs-keyword">from</span> typing <span class="hljs-keyword">import</span> <span class="hljs-type">List</span>,<span class="hljs-type">Dict</span>
+<span class="hljs-keyword">from</span> dataclasses <span class="hljs-keyword">import</span> dataclass,field
+
+logger=logging.getLogger(__name__)
+
+<span class="hljs-meta">@dataclass</span>
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">NotificationMessage</span>:
+    title:<span class="hljs-built_in">str</span>; content:<span class="hljs-built_in">str</span>; severity:<span class="hljs-built_in">str</span>=<span class="hljs-string">"P1"</span>; alert_id:<span class="hljs-built_in">int</span>=<span class="hljs-number">0</span>
+    server_name:<span class="hljs-built_in">str</span>=<span class="hljs-string">""</span>; metric_name:<span class="hljs-built_in">str</span>=<span class="hljs-string">""</span>
+    current_value:<span class="hljs-built_in">float</span>=<span class="hljs-number">0.0</span>; threshold:<span class="hljs-built_in">float</span>=<span class="hljs-number">0.0</span>
+    timestamp:<span class="hljs-built_in">str</span>=field(default_factory=<span class="hljs-keyword">lambda</span>:datetime.now().strftime(<span class="hljs-string">"%Y-%m-%d %H:%M:%S"</span>))
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">to_dingtalk_markdown</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-keyword">return</span> {<span class="hljs-string">"msgtype"</span>:<span class="hljs-string">"markdown"</span>,<span class="hljs-string">"markdown"</span>:{
+            <span class="hljs-string">"title"</span>:<span class="hljs-variable language_">self</span>.title,<span class="hljs-string">"text"</span>:
+            <span class="hljs-string">f"### <span class="hljs-subst">{self.severity}</span> <span class="hljs-subst">{self.title}</span>\n\n"</span>
+            <span class="hljs-string">f"- **服务器**: <span class="hljs-subst">{self.server_name}</span>\n- **指标**: <span class="hljs-subst">{self.metric_name}</span>\n"</span>
+            <span class="hljs-string">f"- **当前值**: <span class="hljs-subst">{self.current_value}</span>\n- **阈值**: <span class="hljs-subst">{self.threshold}</span>\n\n"</span>
+            <span class="hljs-string">f"<span class="hljs-subst">{self.content}</span>\n\n&gt; <span class="hljs-subst">{self.timestamp}</span>"</span>}}
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">to_wechat_text</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-keyword">return</span> <span class="hljs-string">f'&lt;font color="warning"&gt;<span class="hljs-subst">{self.title}</span>&lt;/font&gt;\n<span class="hljs-subst">{self.content}</span>\n时间: <span class="hljs-subst">{self.timestamp}</span>'</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">to_email_html</span>(<span class="hljs-params">self</span>):
+        c={<span class="hljs-string">'P0'</span>:<span class="hljs-string">'#ff4d4f'</span>,<span class="hljs-string">'P1'</span>:<span class="hljs-string">'#fa8c16'</span>,<span class="hljs-string">'P2'</span>:<span class="hljs-string">'#faad14'</span>,<span class="hljs-string">'P3'</span>:<span class="hljs-string">'#52c41a'</span>}
+        color=c.get(<span class="hljs-variable language_">self</span>.severity,<span class="hljs-string">'#1890ff'</span>)
+        <span class="hljs-keyword">return</span> <span class="hljs-string">f'''&lt;html&gt;&lt;body style="font-family:sans-serif;padding:20px"&gt;
+&lt;div style="max-width:600px;margin:auto;border:1px solid #e8e8e8;border-radius:8px;overflow:hidden"&gt;
+&lt;div style="background:<span class="hljs-subst">{color}</span>;color:white;padding:16px 24px"&gt;&lt;h2 style="margin:0"&gt;<span class="hljs-subst">{self.title}</span>&lt;/h2&gt;
+&lt;p style="margin:4px 0 0;opacity:.9"&gt;级别: <span class="hljs-subst">{self.severity}</span>&lt;/p&gt;&lt;/div&gt;
+&lt;div style="padding:24px"&gt;&lt;table style="width:100%;border-collapse:collapse"&gt;
+&lt;tr&gt;&lt;td style="padding:8px;border-bottom:1px solid #eee"&gt;&lt;b&gt;服务器&lt;/b&gt;&lt;/td&gt;&lt;td&gt;<span class="hljs-subst">{self.server_name}</span>&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td style="padding:8px;border-bottom:1px solid #eee"&gt;&lt;b&gt;指标&lt;/b&gt;&lt;/td&gt;&lt;td&gt;<span class="hljs-subst">{self.metric_name}</span>&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td style="padding:8px;border-bottom:1px solid #eee"&gt;&lt;b&gt;当前值&lt;/b&gt;&lt;/td&gt;
+&lt;td style="color:<span class="hljs-subst">{color}</span>;font-weight:bold"&gt;<span class="hljs-subst">{self.current_value}</span>&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td style="padding:8px;border-bottom:1px solid #eee"&gt;&lt;b&gt;阈值&lt;/b&gt;&lt;/td&gt;&lt;td&gt;<span class="hljs-subst">{self.threshold}</span>&lt;/td&gt;&lt;/tr&gt;
+&lt;tr&gt;&lt;td style="padding:8px"&gt;&lt;b&gt;触发时间&lt;/b&gt;&lt;/td&gt;&lt;td&gt;<span class="hljs-subst">{self.timestamp}</span>&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;
+&lt;hr style="border:none;border-top:1px solid #eee;margin:16px 0"&gt;
+&lt;p style="color:#666;line-height:1.6"&gt;<span class="hljs-subst">{self.content}</span>&lt;/p&gt;&lt;/div&gt;
+&lt;div style="background:#fafafa;padding:12px 24px;font-size:12px;color:#999;text-align:center"&gt;
+AiOps 自动发送&lt;/div&gt;&lt;/div&gt;&lt;/body&gt;&lt;/html&gt;'''</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">to_slack_attachment</span>(<span class="hljs-params">self</span>):
+        e={<span class="hljs-string">'P0'</span>:<span class="hljs-string">'danger'</span>,<span class="hljs-string">'P1'</span>:<span class="hljs-string">'warning'</span>,<span class="hljs-string">'P2'</span>:<span class="hljs-string">'warning'</span>,<span class="hljs-string">'P3'</span>:<span class="hljs-string">'good'</span>}
+        em={<span class="hljs-string">'P0'</span>:<span class="hljs-string">':rotating_light:'</span>,<span class="hljs-string">'P1'</span>:<span class="hljs-string">':warning:'</span>,<span class="hljs-string">'P2'</span>:<span class="hljs-string">':information_source:'</span>,<span class="hljs-string">'P3'</span>:<span class="hljs-string">':bell:'</span>}
+        <span class="hljs-keyword">return</span> {<span class="hljs-string">"attachments"</span>:[{<span class="hljs-string">"color"</span>:e.get(<span class="hljs-variable language_">self</span>.severity,<span class="hljs-string">'#439FE5'</span>),
+            <span class="hljs-string">"title"</span>:<span class="hljs-string">f"<span class="hljs-subst">{em.get(self.severity,<span class="hljs-string">''</span>)}</span> <span class="hljs-subst">{self.title}</span>"</span>,
+            <span class="hljs-string">"fields"</span>:[{<span class="hljs-string">"title"</span>:<span class="hljs-string">"服务器"</span>,<span class="hljs-string">"value"</span>:<span class="hljs-variable language_">self</span>.server_name,<span class="hljs-string">"short"</span>:<span class="hljs-literal">True</span>},
+                      {<span class="hljs-string">"title"</span>:<span class="hljs-string">"指标"</span>,<span class="hljs-string">"value"</span>:<span class="hljs-variable language_">self</span>.metric_name,<span class="hljs-string">"short"</span>:<span class="hljs-literal">True</span>},
+                      {<span class="hljs-string">"title"</span>:<span class="hljs-string">"当前值"</span>,<span class="hljs-string">"value"</span>:<span class="hljs-built_in">str</span>(<span class="hljs-variable language_">self</span>.current_value),<span class="hljs-string">"short"</span>:<span class="hljs-literal">True</span>},
+                      {<span class="hljs-string">"title"</span>:<span class="hljs-string">"阈值"</span>,<span class="hljs-string">"value"</span>:<span class="hljs-built_in">str</span>(<span class="hljs-variable language_">self</span>.threshold),<span class="hljs-string">"short"</span>:<span class="hljs-literal">True</span>}],
+            <span class="hljs-string">"text"</span>:<span class="hljs-variable language_">self</span>.content,<span class="hljs-string">"footer"</span>:<span class="hljs-string">"AiOps"</span>,<span class="hljs-string">"ts"</span>:<span class="hljs-built_in">int</span>(time.time())}]}
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">DingTalkChannel</span>:
+    name=<span class="hljs-string">"dingtalk"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,cfg</span>):
+        <span class="hljs-variable language_">self</span>.url=cfg.get(<span class="hljs-string">'webhook_url'</span>,<span class="hljs-string">''</span>); <span class="hljs-variable language_">self</span>.secret=cfg.get(<span class="hljs-string">'secret'</span>,<span class="hljs-string">''</span>)
+        <span class="hljs-variable language_">self</span>.msg_type=cfg.get(<span class="hljs-string">'msg_type'</span>,<span class="hljs-string">'markdown'</span>)
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">send</span>(<span class="hljs-params">self,msg</span>):
+        <span class="hljs-keyword">import</span> requests
+        <span class="hljs-keyword">try</span>:
+            payload=msg.to_dingtalk_markdown() <span class="hljs-keyword">if</span> <span class="hljs-variable language_">self</span>.msg_type==<span class="hljs-string">'markdown'</span> <span class="hljs-keyword">else</span> {<span class="hljs-string">"msgtype"</span>:<span class="hljs-string">"text"</span>,
+                <span class="hljs-string">"text"</span>:{<span class="hljs-string">"content"</span>:<span class="hljs-string">f"**<span class="hljs-subst">{msg.title}</span>**\n<span class="hljs-subst">{msg.content}</span>\n&gt; <span class="hljs-subst">{msg.timestamp}</span>"</span>}}
+            url=<span class="hljs-variable language_">self</span>.url
+            <span class="hljs-keyword">if</span> <span class="hljs-variable language_">self</span>.secret:
+                ts=<span class="hljs-built_in">str</span>(<span class="hljs-built_in">round</span>(time.time()*<span class="hljs-number">1000</span>)); sig_str=<span class="hljs-string">f'<span class="hljs-subst">{ts}</span>\n<span class="hljs-subst">{self.secret}</span>'</span>
+                hc=hmac.new(<span class="hljs-variable language_">self</span>.secret.encode(),sig_str.encode(),digestmod=hashlib.sha256).digest()
+                sign=urllib.parse.quote_plus(base64.b64encode(hc))
+                url=<span class="hljs-string">f"<span class="hljs-subst">{url}</span>&amp;timestamp=<span class="hljs-subst">{ts}</span>&amp;sign=<span class="hljs-subst">{sign}</span>"</span>
+            r=requests.post(url,json=payload,timeout=<span class="hljs-number">10</span>)
+            ok=r.status_code==<span class="hljs-number">200</span> <span class="hljs-keyword">and</span> r.json().get(<span class="hljs-string">'errcode'</span>)==<span class="hljs-number">0</span>
+            <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:ok,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'response'</span>:r.json() <span class="hljs-keyword">if</span> ok <span class="hljs-keyword">else</span> r.text}
+        <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+            logger.error(<span class="hljs-string">f"[DingTalk] <span class="hljs-subst">{e}</span>"</span>); <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'error'</span>:<span class="hljs-built_in">str</span>(e)}
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">WeChatChannel</span>:
+    name=<span class="hljs-string">"wechat"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,cfg</span>): <span class="hljs-variable language_">self</span>.url=cfg.get(<span class="hljs-string">'webhook_url'</span>,<span class="hljs-string">''</span>)
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">send</span>(<span class="hljs-params">self,msg</span>):
+        <span class="hljs-keyword">import</span> requests
+        <span class="hljs-keyword">try</span>:
+            r=requests.post(<span class="hljs-variable language_">self</span>.url,json={<span class="hljs-string">"msgtype"</span>:<span class="hljs-string">"markdown"</span>,
+                <span class="hljs-string">"markdown"</span>:{<span class="hljs-string">"content"</span>:msg.to_wechat_text()}},timeout=<span class="hljs-number">10</span>)
+            <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:r.status_code==<span class="hljs-number">200</span> <span class="hljs-keyword">and</span> r.json().get(<span class="hljs-string">'errcode'</span>)==<span class="hljs-number">0</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name}
+        <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+            logger.error(<span class="hljs-string">f"[WeChat] <span class="hljs-subst">{e}</span>"</span>); <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'error'</span>:<span class="hljs-built_in">str</span>(e)}
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">EmailChannel</span>:
+    name=<span class="hljs-string">"email"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,cfg</span>):
+        <span class="hljs-variable language_">self</span>.host=cfg.get(<span class="hljs-string">'smtp_host'</span>,<span class="hljs-string">''</span>); <span class="hljs-variable language_">self</span>.port=cfg.get(<span class="hljs-string">'smtp_port'</span>,<span class="hljs-number">587</span>)
+        <span class="hljs-variable language_">self</span>.user=cfg.get(<span class="hljs-string">'smtp_user'</span>,<span class="hljs-string">''</span>); <span class="hljs-variable language_">self</span>.pwd=cfg.get(<span class="hljs-string">'smtp_pass'</span>,<span class="hljs-string">''</span>)
+        <span class="hljs-variable language_">self</span>.frm=cfg.get(<span class="hljs-string">'from_addr'</span>,<span class="hljs-string">''</span>); <span class="hljs-variable language_">self</span>.tls=cfg.get(<span class="hljs-string">'use_tls'</span>,<span class="hljs-literal">True</span>)
+        <span class="hljs-variable language_">self</span>.to_addr=cfg.get(<span class="hljs-string">'to_addrs'</span>,<span class="hljs-string">''</span>)
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">send</span>(<span class="hljs-params">self,msg</span>):
+        <span class="hljs-keyword">import</span> smtplib
+        <span class="hljs-keyword">from</span> email.mime.text <span class="hljs-keyword">import</span> MIMEText; <span class="hljs-keyword">from</span> email.mime.multipart <span class="hljs-keyword">import</span> MIMEMultipart
+        <span class="hljs-keyword">try</span>:
+            msg=MIMEMultipart(<span class="hljs-string">'alternative'</span>)
+            msg[<span class="hljs-string">'Subject'</span>]=<span class="hljs-string">f"[<span class="hljs-subst">{msg.severity}</span>] <span class="hljs-subst">{msg.title}</span>"</span>
+            msg[<span class="hljs-string">'From'</span>]=<span class="hljs-variable language_">self</span>.frm; msg[<span class="hljs-string">'To'</span>]=<span class="hljs-variable language_">self</span>.to_addr
+            msg.attach(MIMEText(msg.to_email_html(),<span class="hljs-string">'html'</span>,<span class="hljs-string">'utf-8'</span>))
+            srv=smtplib.SMTP(<span class="hljs-variable language_">self</span>.host,<span class="hljs-variable language_">self</span>.port)
+            <span class="hljs-keyword">if</span> <span class="hljs-variable language_">self</span>.tls: srv.starttls()
+            srv.login(<span class="hljs-variable language_">self</span>.user,<span class="hljs-variable language_">self</span>.pwd)
+            srv.sendmail(<span class="hljs-variable language_">self</span>.frm,<span class="hljs-variable language_">self</span>.to_addr.split(<span class="hljs-string">','</span>),msg.as_string()); srv.quit()
+            <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:<span class="hljs-literal">True</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name}
+        <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+            logger.error(<span class="hljs-string">f"[Email] <span class="hljs-subst">{e}</span>"</span>); <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'error'</span>:<span class="hljs-built_in">str</span>(e)}
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">WebhookChannel</span>:
+    name=<span class="hljs-string">"webhook"</span>
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self,cfg</span>):
+        <span class="hljs-variable language_">self</span>.url=cfg.get(<span class="hljs-string">'url'</span>,<span class="hljs-string">''</span>); <span class="hljs-variable language_">self</span>.method=cfg.get(<span class="hljs-string">'method'</span>,<span class="hljs-string">'POST'</span>)
+        <span class="hljs-variable language_">self</span>.headers=cfg.get(<span class="hljs-string">'headers'</span>,{})
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">send</span>(<span class="hljs-params">self,msg</span>):
+        <span class="hljs-keyword">import</span> requests
+        <span class="hljs-keyword">try</span>:
+            r=requests.request(<span class="hljs-variable language_">self</span>.method,<span class="hljs-variable language_">self</span>.url,json={
+                <span class="hljs-string">"alert_id"</span>:msg.alert_id,<span class="hljs-string">"title"</span>:msg.title,<span class="hljs-string">"content"</span>:msg.content,
+                <span class="hljs-string">"severity"</span>:msg.severity,<span class="hljs-string">"server"</span>:msg.server_name,<span class="hljs-string">"metric"</span>:msg.metric_name,
+                <span class="hljs-string">"current_value"</span>:msg.current_value,<span class="hljs-string">"threshold"</span>:msg.threshold,<span class="hljs-string">"timestamp"</span>:msg.timestamp},
+                headers=<span class="hljs-variable language_">self</span>.headers,timeout=<span class="hljs-number">10</span>)
+            <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:r.status_code&lt;<span class="hljs-number">400</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'status_code'</span>:r.status_code}
+        <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+            <span class="hljs-keyword">return</span> {<span class="hljs-string">'success'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'channel'</span>:<span class="hljs-variable language_">self</span>.name,<span class="hljs-string">'error'</span>:<span class="hljs-built_in">str</span>(e)}
+
+CHANNEL_CLS={<span class="hljs-string">'dingtalk'</span>:DingTalkChannel,<span class="hljs-string">'wechat'</span>:WeChatChannel,
+             <span class="hljs-string">'email'</span>:EmailChannel,<span class="hljs-string">'slack'</span>:<span class="hljs-literal">None</span>,<span class="hljs-string">'webhook'</span>:WebhookChannel}
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">NotificationRouter</span>:
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">__init__</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-variable language_">self</span>.channels={}
+        <span class="hljs-variable language_">self</span>._load()
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">_load</span>(<span class="hljs-params">self</span>):
+        <span class="hljs-keyword">from</span> system.models <span class="hljs-keyword">import</span> SystemConfig
+        <span class="hljs-keyword">for</span> name,cls <span class="hljs-keyword">in</span> CHANNEL_CLS.items():
+            <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> cls: <span class="hljs-keyword">continue</span>
+            raw=SystemConfig.objects.<span class="hljs-built_in">filter</span>(key=<span class="hljs-string">f'notify_<span class="hljs-subst">{name}</span>_config'</span>).first()
+            <span class="hljs-keyword">if</span> raw <span class="hljs-keyword">and</span> raw.value:
+                <span class="hljs-keyword">try</span>:
+                    cfg=json.loads(raw.value); <span class="hljs-variable language_">self</span>.channels[name]=cls(cfg)
+                <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+                    logger.error(<span class="hljs-string">f"[Notify] 加载<span class="hljs-subst">{name}</span>失败: <span class="hljs-subst">{e}</span>"</span>)
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">route_and_send</span>(<span class="hljs-params">self,msg,target_channels</span>):
+        results=[]
+        <span class="hljs-keyword">for</span> ch <span class="hljs-keyword">in</span> target_channels:
+            c=<span class="hljs-variable language_">self</span>.channels.get(ch)
+            <span class="hljs-keyword">if</span> <span class="hljs-keyword">not</span> c:
+                results.append({<span class="hljs-string">'success'</span>:<span class="hljs-literal">False</span>,<span class="hljs-string">'channel'</span>:ch,<span class="hljs-string">'error'</span>:<span class="hljs-string">'not_configured'</span>}); <span class="hljs-keyword">continue</span>
+            r=c.send(msg); results.append(r)
+            st=<span class="hljs-string">"OK"</span> <span class="hljs-keyword">if</span> r[<span class="hljs-string">'success'</span>] <span class="hljs-keyword">else</span> <span class="hljs-string">f"FAIL(<span class="hljs-subst">{r.get(<span class="hljs-string">'error'</span>,<span class="hljs-string">'?'</span>)}</span>)"</span>
+            logger.info(<span class="hljs-string">f"[Notify] <span class="hljs-subst">{ch}</span>: <span class="hljs-subst">{st}</span>"</span>)
+        <span class="hljs-keyword">return</span> results
+
+
+<span class="hljs-keyword">from</span> celery <span class="hljs-keyword">import</span> shared_task
+
+<span class="hljs-meta">@shared_task(<span class="hljs-params">bind=<span class="hljs-literal">True</span>,max_retries=<span class="hljs-number">3</span>,default_retry_delay=<span class="hljs-number">60</span></span>)</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">send_alert_notifications</span>(<span class="hljs-params">self,event_id</span>):
+    <span class="hljs-keyword">from</span> monitoring.models <span class="hljs-keyword">import</span> AlertEvent,NotificationLog
+    <span class="hljs-keyword">try</span>:
+        event=AlertEvent.objects.select_related(<span class="hljs-string">'rule'</span>,<span class="hljs-string">'server'</span>).get(<span class="hljs-built_in">id</span>=event_id)
+        msg=NotificationMessage(
+            title=<span class="hljs-string">f"【<span class="hljs-subst">{event.rule.name}</span>】<span class="hljs-subst">{event.message}</span>"</span>,content=event.detail <span class="hljs-keyword">or</span> <span class="hljs-string">""</span>,
+            severity=event.severity,alert_id=event.<span class="hljs-built_in">id</span>,
+            server_name=event.server.hostname <span class="hljs-keyword">if</span> event.server <span class="hljs-keyword">else</span> <span class="hljs-string">""</span>,
+            metric_name=event.metric_name,current_value=event.current_value,
+            threshold=event.threshold_value <span class="hljs-keyword">or</span> <span class="hljs-number">0</span>)
+        channels=event.rule.notify_channels <span class="hljs-keyword">or</span> [<span class="hljs-string">'dingtalk'</span>]
+        router=NotificationRouter(); results=router.route_and_send(msg,channels)
+        event.notification_log=results; event.save(update_fields=[<span class="hljs-string">'notification_log'</span>])
+        <span class="hljs-keyword">for</span> r <span class="hljs-keyword">in</span> results:
+            NotificationLog.objects.create(alert_event=event,channel=r[<span class="hljs-string">'channel'</span>],
+                status=<span class="hljs-string">'sent'</span> <span class="hljs-keyword">if</span> r[<span class="hljs-string">'success'</span>] <span class="hljs-keyword">else</span> <span class="hljs-string">'failed'</span>,
+                error_message=r.get(<span class="hljs-string">'error'</span>,<span class="hljs-string">''</span>),content_summary=msg.title[:<span class="hljs-number">200</span>])
+        af=<span class="hljs-built_in">all</span>(<span class="hljs-keyword">not</span> rr[<span class="hljs-string">'success'</span>] <span class="hljs-keyword">for</span> rr <span class="hljs-keyword">in</span> results)
+        <span class="hljs-keyword">if</span> af <span class="hljs-keyword">and</span> <span class="hljs-variable language_">self</span>.request.retries&lt;<span class="hljs-variable language_">self</span>.max_retries:
+            <span class="hljs-keyword">raise</span> <span class="hljs-variable language_">self</span>.retry(countdown=<span class="hljs-number">60</span>*(<span class="hljs-variable language_">self</span>.request.retries+<span class="hljs-number">1</span>))
+        <span class="hljs-keyword">return</span> results
+    <span class="hljs-keyword">except</span> AlertEvent.DoesNotExist:
+        <span class="hljs-keyword">return</span> {<span class="hljs-string">'error'</span>:<span class="hljs-string">'not_found'</span>}
+    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+        logger.error(<span class="hljs-string">f"[AlertNotify] <span class="hljs-subst">{event_id}</span>: <span class="hljs-subst">{e}</span>"</span>)
+        <span class="hljs-keyword">raise</span> <span class="hljs-variable language_">self</span>.retry(exc=e)
+</div></code></pre>
+<hr>
+<h3 id="step-7%3A-rest-api-%E5%B1%82-%E2%80%94-monitoring%2Fapi%2Fviews.py-%2B-monitoring%2Fapi%2Furls.py" tabindex="-1">Step 7: REST API 层 — <code>monitoring/api/views.py</code> + <code>monitoring/api/urls.py</code></h3>
+<h4 id="7.1-%E5%88%9B%E5%BB%BA-monitoring%2Fapi%2F__init__.py-(%E7%A9%BA%E6%96%87%E4%BB%B6)" tabindex="-1">7.1 创建 <code>monitoring/api/__init__.py</code> (空文件)</h4>
+<h4 id="7.2-%E5%88%9B%E5%BB%BA-monitoring%2Fapi%2Fviews.py" tabindex="-1">7.2 创建 <code>monitoring/api/views.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/api/views.py</span>
+<span class="hljs-keyword">import</span> json
+<span class="hljs-keyword">from</span> django.http <span class="hljs-keyword">import</span> JsonResponse
+<span class="hljs-keyword">from</span> django.views.decorators.csrf <span class="hljs-keyword">import</span> csrf_exempt
+<span class="hljs-keyword">from</span> django.views.decorators.http <span class="hljs-keyword">import</span> require_GET, require_POST
+<span class="hljs-keyword">from</span> django.utils.decorators <span class="hljs-keyword">import</span> method_decorator
+<span class="hljs-keyword">from</span> django.contrib.auth.decorators <span class="hljs-keyword">import</span> login_required
+<span class="hljs-keyword">from</span> django.utils <span class="hljs-keyword">import</span> timezone
+<span class="hljs-keyword">from</span> django.db.models <span class="hljs-keyword">import</span> Count,Q
+<span class="hljs-keyword">from</span> datetime <span class="hljs-keyword">import</span> timedelta
+
+<span class="hljs-keyword">from</span> monitoring.models <span class="hljs-keyword">import</span> AlertRule, AlertEvent, AlertSilenceRule
+<span class="hljs-keyword">from</span> monitoring.engine.rule_evaluator <span class="hljs-keyword">import</span> RuleEvaluator
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@require_GET</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_rules</span>(<span class="hljs-params">request</span>):
+    rules = AlertRule.objects.<span class="hljs-built_in">all</span>().order_by(<span class="hljs-string">'-created_at'</span>)
+    data = [{
+        <span class="hljs-string">'id'</span>: r.<span class="hljs-built_in">id</span>,<span class="hljs-string">'name'</span>:r.name,<span class="hljs-string">'description'</span>:r.description <span class="hljs-keyword">or</span> <span class="hljs-string">''</span>,
+        <span class="hljs-string">'rule_type'</span>:r.rule_type,<span class="hljs-string">'severity'</span>:r.severity,<span class="hljs-string">'status'</span>:r.status,
+        <span class="hljs-string">'metric_name'</span>:r.metric_name,<span class="hljs-string">'condition_config'</span>:r.condition_config,
+        <span class="hljs-string">'evaluate_interval'</span>:r.evaluate_interval,<span class="hljs-string">'cooldown_seconds'</span>:r.cooldown_seconds,
+        <span class="hljs-string">'notify_channels'</span>:r.notify_channels,<span class="hljs-string">'trigger_count'</span>:r.trigger_count,
+        <span class="hljs-string">'last_triggered_at'</span>:r.last_triggered_at.isoformat() <span class="hljs-keyword">if</span> r.last_triggered_at <span class="hljs-keyword">else</span> <span class="hljs-literal">None</span>,
+        <span class="hljs-string">'created_at'</span>:r.created_at.isoformat(),
+    } <span class="hljs-keyword">for</span> r <span class="hljs-keyword">in</span> rules]
+    <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'items'</span>:data,<span class="hljs-string">'total'</span>:<span class="hljs-built_in">len</span>(data)}})
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_rule_create</span>(<span class="hljs-params">request</span>):
+    <span class="hljs-keyword">try</span>:
+        data = json.loads(request.body)
+        rule = AlertRule.objects.create(
+            name=data[<span class="hljs-string">'name'</span>], description=data.get(<span class="hljs-string">'description'</span>,<span class="hljs-string">''</span>),
+            rule_type=data.get(<span class="hljs-string">'rule_type'</span>,<span class="hljs-string">'threshold'</span>),
+            severity=data.get(<span class="hljs-string">'severity'</span>,<span class="hljs-string">'P1'</span>),
+            metric_name=data.get(<span class="hljs-string">'metric_name'</span>,<span class="hljs-string">'cpu_usage'</span>),
+            condition_config=data.get(<span class="hljs-string">'condition_config'</span>,{}),
+            cooldown_seconds=data.get(<span class="hljs-string">'cooldown_seconds'</span>,<span class="hljs-number">300</span>),
+            max_alerts_per_hour=data.get(<span class="hljs-string">'max_alerts_per_hour'</span>,<span class="hljs-number">10</span>),
+            notify_channels=data.get(<span class="hljs-string">'notify_channels'</span>,[<span class="hljs-string">'dingtalk'</span>]),
+            created_by=request.user,
+        )
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'id'</span>:rule.<span class="hljs-built_in">id</span>}})
+    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-built_in">str</span>(e)})
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_rule_toggle</span>(<span class="hljs-params">request, pk</span>):
+    <span class="hljs-keyword">try</span>:
+        rule = AlertRule.objects.get(<span class="hljs-built_in">id</span>=pk)
+        rule.status = <span class="hljs-string">'disabled'</span> <span class="hljs-keyword">if</span> rule.status == <span class="hljs-string">'enabled'</span> <span class="hljs-keyword">else</span> <span class="hljs-string">'enabled'</span>
+        rule.save()
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'new_status'</span>:rule.status}})
+    <span class="hljs-keyword">except</span> AlertRule.DoesNotExist:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-string">'规则不存在'</span>}, status=<span class="hljs-number">404</span>)
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@require_GET</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_alerts</span>(<span class="hljs-params">request</span>):
+    status_filter = request.GET.get(<span class="hljs-string">'status'</span>,<span class="hljs-string">''</span>)
+    severity = request.GET.get(<span class="hljs-string">'severity'</span>,<span class="hljs-string">''</span>)
+    page = <span class="hljs-built_in">int</span>(request.GET.get(<span class="hljs-string">'page'</span>,<span class="hljs-number">1</span>))
+    size = <span class="hljs-built_in">int</span>(request.GET.get(<span class="hljs-string">'size'</span>,<span class="hljs-number">20</span>))
+
+    qs = AlertEvent.objects.<span class="hljs-built_in">all</span>()
+    <span class="hljs-keyword">if</span> status_filter: qs = qs.<span class="hljs-built_in">filter</span>(status=status_filter)
+    <span class="hljs-keyword">if</span> severity: qs = qs.<span class="hljs-built_in">filter</span>(severity=severity)
+
+    total = qs.count()
+    items = qs.order_by(<span class="hljs-string">'-fired_at'</span>)[(page-<span class="hljs-number">1</span>)*size:page*size]
+    data = [{
+        <span class="hljs-string">'id'</span>:a.<span class="hljs-built_in">id</span>,<span class="hljs-string">'rule_name'</span>:a.rule.name,<span class="hljs-string">'server_name'</span>:a.server.hostname <span class="hljs-keyword">if</span> a.server <span class="hljs-keyword">else</span> <span class="hljs-string">''</span>,
+        <span class="hljs-string">'severity'</span>:a.severity,<span class="hljs-string">'status'</span>:a.status,<span class="hljs-string">'metric_name'</span>:a.metric_name,
+        <span class="hljs-string">'current_value'</span>:a.current_value,<span class="hljs-string">'threshold_value'</span>:a.threshold_value,
+        <span class="hljs-string">'message'</span>:a.message,<span class="hljs-string">'fired_at'</span>:a.fired_at.isoformat(),
+        <span class="hljs-string">'duration_sec'</span>:<span class="hljs-built_in">int</span>(a.duration),
+    } <span class="hljs-keyword">for</span> a <span class="hljs-keyword">in</span> items]
+    <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'items'</span>:data,<span class="hljs-string">'total'</span>:total,<span class="hljs-string">'page'</span>:page}})
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_alert_acknowledge</span>(<span class="hljs-params">request, pk</span>):
+    <span class="hljs-keyword">try</span>:
+        event = AlertEvent.objects.get(<span class="hljs-built_in">id</span>=pk)
+        event.status = <span class="hljs-string">'acknowledged'</span>
+        event.acknowledged_at = timezone.now()
+        event.acknowledged_by = request.user
+        event.save()
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>})
+    <span class="hljs-keyword">except</span> AlertEvent.DoesNotExist:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-string">'不存在'</span>}, status=<span class="hljs-number">404</span>)
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_alert_resolve</span>(<span class="hljs-params">request, pk</span>):
+    <span class="hljs-keyword">try</span>:
+        event = AlertEvent.objects.get(<span class="hljs-built_in">id</span>=pk)
+        event.status = <span class="hljs-string">'resolved'</span>
+        event.resolved_at = timezone.now()
+        event.save()
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>})
+    <span class="hljs-keyword">except</span> AlertEvent.DoesNotExist:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-string">'不存在'</span>}, status=<span class="hljs-number">404</span>)
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_alert_silence</span>(<span class="hljs-params">request</span>):
+    <span class="hljs-keyword">try</span>:
+        data = json.loads(request.body)
+        silence = AlertSilenceRule.objects.create(
+            name=data.get(<span class="hljs-string">'name'</span>,<span class="hljs-string">'临时静默'</span>),
+            match_severity=data.get(<span class="hljs-string">'severity'</span>,<span class="hljs-string">''</span>),
+            start_time=timezone.now(),
+            end_time=timezone.now()+timedelta(minutes=<span class="hljs-built_in">int</span>(data.get(<span class="hljs-string">'duration_minutes'</span>,<span class="hljs-number">60</span>))),
+            comment=data.get(<span class="hljs-string">'comment'</span>,<span class="hljs-string">''</span>),
+            created_by=request.user,
+        )
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'id'</span>:silence.<span class="hljs-built_in">id</span>}})
+    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-built_in">str</span>(e)})
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@require_GET</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_alert_stats</span>(<span class="hljs-params">request</span>):
+    now = timezone.now()
+    hour_ago = now - timedelta(hours=<span class="hljs-number">1</span>)
+    day_ago = now - timedelta(days=<span class="hljs-number">1</span>)
+    week_ago = now - timedelta(days=<span class="hljs-number">7</span>)
+
+    stats = {
+        <span class="hljs-string">'firing_count'</span>: AlertEvent.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'firing'</span>).count(),
+        <span class="hljs-string">'today_total'</span>: AlertEvent.objects.<span class="hljs-built_in">filter</span>(fired_at__gte=day_ago).count(),
+        <span class="hljs-string">'week_total'</span>: AlertEvent.objects.<span class="hljs-built_in">filter</span>(fired_at__gte=week_ago).count(),
+        <span class="hljs-string">'hour_fired'</span>: AlertEvent.objects.<span class="hljs-built_in">filter</span>(fired_at__gte=hour_ago).count(),
+        <span class="hljs-string">'by_severity'</span>: <span class="hljs-built_in">dict</span>(
+            AlertEvent.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'firing'</span>)
+            .values_list(<span class="hljs-string">'severity'</span>).annotate(cnt=Count(<span class="hljs-string">'id'</span>)).values_list(<span class="hljs-string">'severity'</span>,<span class="hljs-string">'cnt'</span>)
+        ),
+        <span class="hljs-string">'by_metric'</span>: <span class="hljs-built_in">dict</span>(
+            AlertEvent.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'firing'</span>,fired_at__gte=day_ago)
+            .values_list(<span class="hljs-string">'metric_name'</span>).annotate(cnt=Count(<span class="hljs-string">'id'</span>)).values_list(<span class="hljs-string">'metric_name'</span>,<span class="hljs-string">'cnt'</span>)
+        ),
+        <span class="hljs-string">'active_rules'</span>: AlertRule.objects.<span class="hljs-built_in">filter</span>(status=<span class="hljs-string">'enabled'</span>).count(),
+        <span class="hljs-string">'total_rules'</span>: AlertRule.objects.count(),
+    }
+    <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:stats})
+
+
+<span class="hljs-meta">@login_required</span>
+<span class="hljs-meta">@csrf_exempt</span>
+<span class="hljs-meta">@require_POST</span>
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">api_rule_test</span>(<span class="hljs-params">request</span>):
+    <span class="hljs-string">"""Dry Run: 测试规则但不真正触发告警"""</span>
+    <span class="hljs-keyword">try</span>:
+        data = json.loads(request.body)
+        rule_id = data.get(<span class="hljs-string">'rule_id'</span>)
+        evaluator = RuleEvaluator(AlertRule.objects.get(<span class="hljs-built_in">id</span>=rule_id))
+        fired, detail = evaluator.evaluate()
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">0</span>,<span class="hljs-string">'data'</span>:{<span class="hljs-string">'would_fire'</span>:fired,<span class="hljs-string">'detail'</span>:detail}})
+    <span class="hljs-keyword">except</span> Exception <span class="hljs-keyword">as</span> e:
+        <span class="hljs-keyword">return</span> JsonResponse({<span class="hljs-string">'code'</span>:<span class="hljs-number">1</span>,<span class="hljs-string">'msg'</span>:<span class="hljs-built_in">str</span>(e)})
+</div></code></pre>
+<h4 id="7.3-%E5%88%9B%E5%BB%BA-monitoring%2Fapi%2Furls.py" tabindex="-1">7.3 创建 <code>monitoring/api/urls.py</code></h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/api/urls.py</span>
+<span class="hljs-keyword">from</span> django.urls <span class="hljs-keyword">import</span> path
+<span class="hljs-keyword">from</span> . <span class="hljs-keyword">import</span> views
+
+urlpatterns = [
+    path(<span class="hljs-string">'rules/'</span>, views.api_rules, name=<span class="hljs-string">'api_rules'</span>),
+    path(<span class="hljs-string">'rules/create/'</span>, views.api_rule_create, name=<span class="hljs-string">'api_rule_create'</span>),
+    path(<span class="hljs-string">'rules/&lt;int:pk&gt;/toggle/'</span>, views.api_rule_toggle, name=<span class="hljs-string">'api_rule_toggle'</span>),
+    path(<span class="hljs-string">'rules/test/'</span>, views.api_rule_test, name=<span class="hljs-string">'api_rule_test'</span>),
+    path(<span class="hljs-string">'alerts/'</span>, views.api_alerts, name=<span class="hljs-string">'api_alerts'</span>),
+    path(<span class="hljs-string">'alerts/stats/'</span>, views.api_alert_stats, name=<span class="hljs-string">'api_alert_stats'</span>),
+    path(<span class="hljs-string">'alerts/&lt;int:pk&gt;/ack/'</span>, views.api_alert_acknowledge, name=<span class="hljs-string">'api_alert_ack'</span>),
+    path(<span class="hljs-string">'alerts/&lt;int:pk&gt;/resolve/'</span>, views.api_alert_resolve, name=<span class="hljs-string">'api_alert_resolve'</span>),
+    path(<span class="hljs-string">'alerts/silence/'</span>, views.api_alert_silence, name=<span class="hljs-string">'api_alert_silence'</span>),
+]
+</div></code></pre>
+<hr>
+<h3 id="step-8%3A-celery-%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1-%E2%80%94-monitoring%2Fmanagement%2Fcommands%2Fevaluate_rules.py" tabindex="-1">Step 8: Celery 定时任务 — <code>monitoring/management/commands/evaluate_rules.py</code></h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># monitoring/management/commands/evaluate_rules.py</span>
+<span class="hljs-string">"""
+管理命令: 启动规则评估调度器
+用法: python manage.py evaluate_rules
+"""</span>
+
+<span class="hljs-keyword">import</span> logging
+<span class="hljs-keyword">from</span> apscheduler.schedulers.blocking <span class="hljs-keyword">import</span> BlockingScheduler
+<span class="hljs-keyword">from</span> django.core.management.base <span class="hljs-keyword">import</span> BaseCommand
+<span class="hljs-keyword">from</span> django.conf <span class="hljs-keyword">import</span> settings
+<span class="hljs-keyword">from</span> django.utils <span class="hljs-keyword">import</span> timezone
+
+<span class="hljs-keyword">from</span> monitoring.engine.rule_evaluator <span class="hljs-keyword">import</span> RuleEvaluator
+
+logger = logging.getLogger(__name__)
+
+
+<span class="hljs-keyword">def</span> <span class="hljs-title function_">job_evaluate_all</span>():
+    <span class="hljs-string">"""定时执行所有启用规则的评估"""</span>
+    logger.info(<span class="hljs-string">"--- [RuleEngine] 开始周期性评估 ---"</span>)
+    result = RuleEvaluator.evaluate_all()
+
+    logger.info(
+        <span class="hljs-string">f"[RuleEngine] 评估完成: 评估<span class="hljs-subst">{result[<span class="hljs-string">'evaluated'</span>]}</span>条规则, "</span>
+        <span class="hljs-string">f"触发<span class="hljs-subst">{result[<span class="hljs-string">'fired'</span>]}</span>次告警"</span>
+    )
+    <span class="hljs-keyword">if</span> result[<span class="hljs-string">'errors'</span>]:
+        <span class="hljs-keyword">for</span> err <span class="hljs-keyword">in</span> result[<span class="hljs-string">'errors'</span>]:
+            logger.error(<span class="hljs-string">f"[RuleEngine] 错误: <span class="hljs-subst">{err}</span>"</span>)
+
+
+<span class="hljs-keyword">class</span> <span class="hljs-title class_">Command</span>(<span class="hljs-title class_ inherited__">BaseCommand</span>):
+    <span class="hljs-built_in">help</span> = <span class="hljs-string">'启动预警规则评估调度器 (基于APScheduler)'</span>
+
+    <span class="hljs-keyword">def</span> <span class="hljs-title function_">handle</span>(<span class="hljs-params">self, *args, **options</span>):
+        <span class="hljs-variable language_">self</span>.stdout.write(<span class="hljs-variable language_">self</span>.style.SUCCESS(<span class="hljs-string">'[RuleEngine] 预警规则评估器启动...'</span>))
+
+        scheduler = BlockingScheduler(timezone=settings.TIME_ZONE)
+
+        <span class="hljs-comment"># 默认每60秒评估一次所有启用的规则</span>
+        scheduler.add_job(job_evaluate_all, <span class="hljs-string">'interval'</span>, seconds=<span class="hljs-number">60</span>,
+                         <span class="hljs-built_in">id</span>=<span class="hljs-string">'evaluate_alert_rules'</span>, replace_existing=<span class="hljs-literal">True</span>, max_instances=<span class="hljs-number">1</span>)
+
+        <span class="hljs-keyword">try</span>:
+            job_evaluate_all()  <span class="hljs-comment"># 启动时立即执行一次</span>
+            scheduler.start()
+        <span class="hljs-keyword">except</span> KeyboardInterrupt:
+            <span class="hljs-variable language_">self</span>.stdout.write(<span class="hljs-string">"[RuleEngine] 已停止."</span>)
+</div></code></pre>
+<hr>
+<h3 id="step-9%3A-%E6%B3%A8%E5%86%8C%E5%BA%94%E7%94%A8%E5%88%B0-django-%E9%85%8D%E7%BD%AE" tabindex="-1">Step 9: 注册应用到 Django 配置</h3>
+<h4 id="9.1-%E4%BF%AE%E6%94%B9-ops_platform%2Fsettings.py" tabindex="-1">9.1 修改 <code>ops_platform/settings.py</code></h4>
+<p>在 <code>INSTALLED_APPS</code> 列表中添加 <code>'monitoring'</code>:</p>
+<p>找到这一行:</p>
+<pre class="hljs"><code><div>    <span class="hljs-string">'k8s_manager'</span>,  <span class="hljs-comment"># K8s 多集群管理</span>
+]
+</div></code></pre>
+<p>改为:</p>
+<pre class="hljs"><code><div>    <span class="hljs-string">'k8s_manager'</span>,  <span class="hljs-comment"># K8s 多集群管理</span>
+    <span class="hljs-string">'monitoring'</span>,  <span class="hljs-comment"># 智能监控告警 (Phase 1 新增)</span>
+]
+</div></code></pre>
+<p>在 LOGGING 的 loggers 字典末尾添加 monitoring 日志配置:</p>
+<p>找到 <code>'k8s_manager': {...}</code> 之后，添加:</p>
+<pre class="hljs"><code><div>        <span class="hljs-string">'monitoring'</span>: {
+            <span class="hljs-string">'handlers'</span>: [<span class="hljs-string">'console'</span>],
+            <span class="hljs-string">'level'</span>: <span class="hljs-string">'DEBUG'</span>,
+            <span class="hljs-string">'propagate'</span>: <span class="hljs-literal">False</span>,
+        },
+</div></code></pre>
+<p>在 <code>CELERY_BEAT_SCHEDULE</code> 中添加规则评估任务 (可选，如果用 APScheduler 则不需要):</p>
+<pre class="hljs"><code><div>    <span class="hljs-string">'evaluate-alert-rules-every-minute'</span>: {
+        <span class="hljs-string">'task'</span>: <span class="hljs-string">'monitoring.management.commands.evaluate_rules.job_evaluate_all'</span>,
+        <span class="hljs-string">'schedule'</span>: crontab(minute=<span class="hljs-string">'*/1'</span>),
+    },
+</div></code></pre>
+<h4 id="9.2-%E4%BF%AE%E6%94%B9-ops_platform%2Furls.py" tabindex="-1">9.2 修改 <code>ops_platform/urls.py</code></h4>
+<p>在文件末尾 <code>path('k8s/', ...)</code> 之后添加:</p>
+<pre class="hljs"><code><div>    <span class="hljs-comment"># === 监控告警 API (Phase 1 新增) ===</span>
+    path(<span class="hljs-string">'api/monitoring/'</span>, include(<span class="hljs-string">'monitoring.api.urls'</span>)),
+</div></code></pre>
+<p>同时在文件顶部添加 include 导入 (应该已经有了):</p>
+<pre class="hljs"><code><div><span class="hljs-keyword">from</span> django.urls <span class="hljs-keyword">import</span> path, include
+</div></code></pre>
+<hr>
+<h3 id="step-10%3A-dashboard-%E5%A2%9E%E5%BC%BA-%E2%80%94-%E5%B5%8C%E5%85%A5%E5%91%8A%E8%AD%A6%E9%9D%A2%E6%9D%BF" tabindex="-1">Step 10: Dashboard 增强 — 嵌入告警面板</h3>
+<p>在 [templates/index.html](file:///d:/codes/aiops/templates/index.html) 中，找到合适的位置（通常在主图表区域之后），追加以下 HTML 片段:</p>
+<pre class="hljs"><code><div><span class="hljs-comment">&lt;!-- ==================== 告警面板 (Phase 1 新增) ==================== --&gt;</span>
+{% load humanize %}
+<span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"row mt-4"</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"col-md-12"</span>&gt;</span>
+        <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card"</span>&gt;</span>
+            <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card-header d-flex justify-content-between align-items-center"</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">h5</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"mb-0"</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">i</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"fas fa-bell text-danger"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">i</span>&gt;</span> 活跃告警
+                    <span class="hljs-tag">&lt;<span class="hljs-name">span</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-count"</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"badge badge-danger ml-2"</span>&gt;</span>0<span class="hljs-tag">&lt;/<span class="hljs-name">span</span>&gt;</span>
+                <span class="hljs-tag">&lt;/<span class="hljs-name">h5</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">div</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-primary"</span> <span class="hljs-attr">onclick</span>=<span class="hljs-string">"refreshAlerts()"</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">i</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"fas fa-sync-alt"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">i</span>&gt;</span> 刷新
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">a</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"/admin/monitoring/alertevent/"</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-secondary ml-1"</span> <span class="hljs-attr">target</span>=<span class="hljs-string">"_blank"</span>&gt;</span>
+                        管理全部
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">a</span>&gt;</span>
+                <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+            <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+            <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card-body p-0"</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-list-container"</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"text-center text-muted py-4"</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-loading"</span>&gt;</span>加载中...<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">table</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"table table-hover mb-0"</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-table"</span> <span class="hljs-attr">style</span>=<span class="hljs-string">"display:none;"</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">thead</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"thead-light"</span>&gt;</span>
+                            <span class="hljs-tag">&lt;<span class="hljs-name">tr</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span> <span class="hljs-attr">width</span>=<span class="hljs-string">"60"</span>&gt;</span>级别<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span>&gt;</span>规则<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span>&gt;</span>服务器<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span>&gt;</span>消息<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span> <span class="hljs-attr">width</span>=<span class="hljs-string">"80"</span>&gt;</span>状态<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span> <span class="hljs-attr">width</span>=<span class="hljs-string">"120"</span>&gt;</span>触发时间<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                                <span class="hljs-tag">&lt;<span class="hljs-name">th</span> <span class="hljs-attr">width</span>=<span class="hljs-string">"140"</span>&gt;</span>操作<span class="hljs-tag">&lt;/<span class="hljs-name">th</span>&gt;</span>
+                            <span class="hljs-tag">&lt;/<span class="hljs-name">tr</span>&gt;</span>
+                        <span class="hljs-tag">&lt;/<span class="hljs-name">thead</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">tbody</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-tbody"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">tbody</span>&gt;</span>
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">table</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">id</span>=<span class="hljs-string">"alert-empty"</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"text-center text-muted py-4"</span> <span class="hljs-attr">style</span>=<span class="hljs-string">"display:none;"</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">i</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"fas fa-check-circle text-success fa-2x"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">i</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">p</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"mt-2 mb-0"</span>&gt;</span>暂无活跃告警<span class="hljs-tag">&lt;/<span class="hljs-name">p</span>&gt;</span>
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+                <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+            <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+
+<span class="hljs-comment">&lt;!-- 快捷操作: 预置常用规则 --&gt;</span>
+<span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"row mt-3"</span>&gt;</span>
+    <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"col-md-12"</span>&gt;</span>
+        <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card"</span>&gt;</span>
+            <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card-header"</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">h5</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"mb-0"</span>&gt;</span><span class="hljs-tag">&lt;<span class="hljs-name">i</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"fas fa-cog"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">i</span>&gt;</span> 快捷预置规则<span class="hljs-tag">&lt;/<span class="hljs-name">h5</span>&gt;</span>
+            <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+            <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"card-body"</span>&gt;</span>
+                <span class="hljs-tag">&lt;<span class="hljs-name">div</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"d-flex flex-wrap gap-2"</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-danger"</span> <span class="hljs-attr">onclick</span>=<span class="hljs-string">"createPresetRule('cpu_high')"</span>&gt;</span>
+                        CPU &gt; 90% 告警
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-warning"</span> <span class="hljs-attr">onclick</span>=<span class="hljs-string">"createPresetRule('mem_high')"</span>&gt;</span>
+                        内存 &gt; 85% 告警
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-info"</span> <span class="hljs-attr">onclick</span>=<span class="hljs-string">"createPresetRule('disk_high')"</span>&gt;</span>
+                        磁盘 &gt; 90% 告警
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">button</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-outline-secondary"</span> <span class="hljs-attr">onclick</span>=<span class="hljs-string">"createPresetRule('agent_lost')"</span>&gt;</span>
+                        Agent 掉线检测
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">button</span>&gt;</span>
+                    <span class="hljs-tag">&lt;<span class="hljs-name">a</span> <span class="hljs-attr">href</span>=<span class="hljs-string">"/admin/monitoring/alertrule/add/"</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"btn btn-sm btn-primary"</span> <span class="hljs-attr">target</span>=<span class="hljs-string">"_blank"</span>&gt;</span>
+                        <span class="hljs-tag">&lt;<span class="hljs-name">i</span> <span class="hljs-attr">class</span>=<span class="hljs-string">"fas fa-plus"</span>&gt;</span><span class="hljs-tag">&lt;/<span class="hljs-name">i</span>&gt;</span> 自定义规则
+                    <span class="hljs-tag">&lt;/<span class="hljs-name">a</span>&gt;</span>
+                <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+            <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+        <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+    <span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+<span class="hljs-tag">&lt;/<span class="hljs-name">div</span>&gt;</span>
+
+<span class="hljs-tag">&lt;<span class="hljs-name">script</span>&gt;</span><span class="language-javascript">
+<span class="hljs-comment">// ========== 告警面板 JS ==========</span>
+<span class="hljs-keyword">const</span> <span class="hljs-variable constant_">ALERT_API</span> = <span class="hljs-string">'/api/monitoring/alerts/'</span>;
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">refreshAlerts</span>(<span class="hljs-params"></span>) {
+    <span class="hljs-title function_">fetch</span>(<span class="hljs-variable constant_">ALERT_API</span> + <span class="hljs-string">'?status=firing&amp;size=20'</span>)
+        .<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">r</span> =&gt;</span> r.<span class="hljs-title function_">json</span>())
+        .<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">resp</span> =&gt;</span> {
+            <span class="hljs-keyword">const</span> items = resp.<span class="hljs-property">data</span>.<span class="hljs-property">items</span> || [];
+            <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">'alert-count'</span>).<span class="hljs-property">textContent</span> = items.<span class="hljs-property">length</span>;
+            
+            <span class="hljs-keyword">const</span> tbody = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">'alert-tbody'</span>);
+            <span class="hljs-keyword">const</span> table = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">'alert-table'</span>);
+            <span class="hljs-keyword">const</span> empty = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">'alert-empty'</span>);
+            <span class="hljs-keyword">const</span> loading = <span class="hljs-variable language_">document</span>.<span class="hljs-title function_">getElementById</span>(<span class="hljs-string">'alert-loading'</span>);
+
+            loading.<span class="hljs-property">style</span>.<span class="hljs-property">display</span> = <span class="hljs-string">'none'</span>;
+            
+            <span class="hljs-keyword">if</span> (items.<span class="hljs-property">length</span> === <span class="hljs-number">0</span>) {
+                table.<span class="hljs-property">style</span>.<span class="hljs-property">display</span> = <span class="hljs-string">'none'</span>;
+                empty.<span class="hljs-property">style</span>.<span class="hljs-property">display</span> = <span class="hljs-string">'block'</span>;
+                tbody.<span class="hljs-property">innerHTML</span> = <span class="hljs-string">''</span>;
+                <span class="hljs-keyword">return</span>;
+            }
+
+            empty.<span class="hljs-property">style</span>.<span class="hljs-property">display</span> = <span class="hljs-string">'none'</span>;
+            table.<span class="hljs-property">style</span>.<span class="hljs-property">display</span> = <span class="hljs-string">'table'</span>;
+
+            <span class="hljs-keyword">const</span> sevColors = {<span class="hljs-string">'P0'</span>:<span class="hljs-string">'danger'</span>,<span class="hljs-string">'P1'</span>:<span class="hljs-string">'warning'</span>,<span class="hljs-string">'P2'</span>:<span class="hljs-string">'info'</span>,<span class="hljs-string">'P3'</span>:<span class="hljs-string">'secondary'</span>};
+            <span class="hljs-keyword">const</span> statColors = {<span class="hljs-string">'firing'</span>:<span class="hljs-string">'danger'</span>,<span class="hljs-string">'acknowledged'</span>:<span class="hljs-string">'warning'</span>,<span class="hljs-string">'resolved'</span>:<span class="hljs-string">'success'</span>};
+            <span class="hljs-keyword">const</span> statLabels = {<span class="hljs-string">'firing'</span>:<span class="hljs-string">'触发中'</span>,<span class="hljs-string">'acknowledged'</span>:<span class="hljs-string">'已确认'</span>,<span class="hljs-string">'resolved'</span>:<span class="hljs-string">'已恢复'</span>};
+
+            tbody.<span class="hljs-property">innerHTML</span> = items.<span class="hljs-title function_">map</span>(<span class="hljs-function"><span class="hljs-params">a</span> =&gt;</span> <span class="hljs-string">`
+                &lt;tr&gt;
+                    &lt;td&gt;&lt;span class="badge badge-<span class="hljs-subst">${sevColors[a.severity]||<span class="hljs-string">'secondary'</span>}</span>"&gt;<span class="hljs-subst">${a.severity}</span>&lt;/span&gt;&lt;/td&gt;
+                    &lt;td&gt;<span class="hljs-subst">${esc(a.rule_name)}</span>&lt;/td&gt;
+                    &lt;td&gt;<span class="hljs-subst">${esc(a.server_name)||<span class="hljs-string">'-'</span>}</span>&lt;/td&gt;
+                    &lt;td title="<span class="hljs-subst">${esc(a.message)}</span>"&gt;<span class="hljs-subst">${esc(a.message).substring(<span class="hljs-number">0</span>,<span class="hljs-number">60</span>)}</span><span class="hljs-subst">${a.message.length&gt;<span class="hljs-number">60</span>?<span class="hljs-string">'...'</span>:<span class="hljs-string">''</span>}</span>&lt;/td&gt;
+                    &lt;td&gt;&lt;span class="badge badge-<span class="hljs-subst">${statColors[a.status]||<span class="hljs-string">'secondary'</span>}</span>"&gt;<span class="hljs-subst">${statLabels[a.status]}</span>&lt;/span&gt;&lt;/td&gt;
+                    &lt;td&gt;<span class="hljs-subst">${timeAgo(a.fired_at)}</span>&lt;/td&gt;
+                    &lt;td&gt;
+                        <span class="hljs-subst">${a.status===<span class="hljs-string">'firing'</span>?<span class="hljs-string">`
+                            &lt;button class="btn btn-xs btn-outline-success" onclick="ackAlert(<span class="hljs-subst">${a.id}</span>)"&gt;确认&lt;/button&gt;
+                            &lt;button class="btn btn-xs btn-outline-secondary" onclick="resolveAlert(<span class="hljs-subst">${a.id}</span>)"&gt;恢复&lt;/button&gt;
+                        `</span>:<span class="hljs-string">''</span>}</span>
+                    &lt;/td&gt;
+                &lt;/tr&gt;
+            `</span>).<span class="hljs-title function_">join</span>(<span class="hljs-string">''</span>);
+        })
+        .<span class="hljs-title function_">catch</span>(<span class="hljs-function"><span class="hljs-params">err</span> =&gt;</span> <span class="hljs-variable language_">console</span>.<span class="hljs-title function_">error</span>(<span class="hljs-string">'加载告警失败:'</span>, err));
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">ackAlert</span>(<span class="hljs-params">id</span>) {
+    <span class="hljs-title function_">fetch</span>(<span class="hljs-string">`/api/monitoring/alerts/<span class="hljs-subst">${id}</span>/ack/`</span>, {<span class="hljs-attr">method</span>:<span class="hljs-string">'POST'</span>})
+        .<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">refreshAlerts</span>());
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">resolveAlert</span>(<span class="hljs-params">id</span>) {
+    <span class="hljs-title function_">fetch</span>(<span class="hljs-string">`/api/monitoring/alerts/<span class="hljs-subst">${id}</span>/resolve/`</span>, {<span class="hljs-attr">method</span>:<span class="hljs-string">'POST'</span>})
+        .<span class="hljs-title function_">then</span>(<span class="hljs-function">() =&gt;</span> <span class="hljs-title function_">refreshAlerts</span>());
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">createPresetRule</span>(<span class="hljs-params">type</span>) {
+    <span class="hljs-keyword">const</span> presets = {
+        <span class="hljs-attr">cpu_high</span>: {<span class="hljs-attr">name</span>:<span class="hljs-string">'CPU使用率过高'</span>,<span class="hljs-attr">metric_name</span>:<span class="hljs-string">'cpu_usage'</span>,<span class="hljs-attr">rule_type</span>:<span class="hljs-string">'threshold'</span>,
+                  <span class="hljs-attr">condition_config</span>:{<span class="hljs-attr">operator</span>:<span class="hljs-string">'gt'</span>,<span class="hljs-attr">value</span>:<span class="hljs-number">90</span>},<span class="hljs-attr">severity</span>:<span class="hljs-string">'P1'</span>},
+        <span class="hljs-attr">mem_high</span>: {<span class="hljs-attr">name</span>:<span class="hljs-string">'内存使用率过高'</span>,<span class="hljs-attr">metric_name</span>:<span class="hljs-string">'mem_usage'</span>,<span class="hljs-attr">rule_type</span>:<span class="hljs-string">'threshold'</span>,
+                  <span class="hljs-attr">condition_config</span>:{<span class="hljs-attr">operator</span>:<span class="hljs-string">'gt'</span>,<span class="hljs-attr">value</span>:<span class="hljs-number">85</span>},<span class="hljs-attr">severity</span>:<span class="hljs-string">'P1'</span>},
+        <span class="hljs-attr">disk_high</span>: {<span class="hljs-attr">name</span>:<span class="hljs-string">'磁盘空间不足'</span>,<span class="hljs-attr">metric_name</span>:<span class="hljs-string">'disk_usage'</span>,<span class="hljs-attr">rule_type</span>:<span class="hljs-string">'threshold'</span>,
+                   <span class="hljs-attr">condition_config</span>:{<span class="hljs-attr">operator</span>:<span class="hljs-string">'gt'</span>,<span class="hljs-attr">value</span>:<span class="hljs-number">90</span>},<span class="hljs-attr">severity</span>:<span class="hljs-string">'P2'</span>},
+        <span class="hljs-attr">agent_lost</span>: {<span class="hljs-attr">name</span>:<span class="hljs-string">'Agent掉线检测'</span>,<span class="hljs-attr">metric_name</span>:<span class="hljs-string">'cpu_usage'</span>,<span class="hljs-attr">rule_type</span>:<span class="hljs-string">'absence'</span>,
+                   <span class="hljs-attr">condition_config</span>:{<span class="hljs-attr">absent_minutes</span>:<span class="hljs-number">5</span>},<span class="hljs-attr">severity</span>:<span class="hljs-string">'P1'</span>}
+    };
+    <span class="hljs-keyword">const</span> p = presets[type];
+    <span class="hljs-keyword">if</span> (!p) <span class="hljs-keyword">return</span>;
+    
+    <span class="hljs-comment">// 通过API创建规则</span>
+    <span class="hljs-title function_">fetch</span>(<span class="hljs-string">'/api/monitoring/rules/create/'</span>, {
+        <span class="hljs-attr">method</span>:<span class="hljs-string">'POST'</span>,
+        <span class="hljs-attr">headers</span>:{<span class="hljs-string">'Content-Type'</span>:<span class="hljs-string">'application/json'</span>},
+        <span class="hljs-attr">body</span>:<span class="hljs-title class_">JSON</span>.<span class="hljs-title function_">stringify</span>(p)
+    }).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">r</span>=&gt;</span>r.<span class="hljs-title function_">json</span>()).<span class="hljs-title function_">then</span>(<span class="hljs-function"><span class="hljs-params">resp</span>=&gt;</span>{
+        <span class="hljs-keyword">if</span>(resp.<span class="hljs-property">code</span>===<span class="hljs-number">0</span>){
+            <span class="hljs-title function_">alert</span>(<span class="hljs-string">`规则 "<span class="hljs-subst">${p.name}</span>" 创建成功! ID=<span class="hljs-subst">${resp.data.id}</span>`</span>);
+            <span class="hljs-title function_">refreshAlerts</span>();
+        } <span class="hljs-keyword">else</span> {
+            <span class="hljs-title function_">alert</span>(<span class="hljs-string">'创建失败: '</span>+resp.<span class="hljs-property">msg</span>);
+        }
+    });
+}
+
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">esc</span>(<span class="hljs-params">s</span>){ <span class="hljs-keyword">const</span> d=<span class="hljs-variable language_">document</span>.<span class="hljs-title function_">createElement</span>(<span class="hljs-string">'div'</span>); d.<span class="hljs-property">textContent</span>=s; <span class="hljs-keyword">return</span> d.<span class="hljs-property">innerHTML</span>;}
+<span class="hljs-keyword">function</span> <span class="hljs-title function_">timeAgo</span>(<span class="hljs-params">isoStr</span>){
+    <span class="hljs-keyword">const</span> diff=(<span class="hljs-title class_">Date</span>.<span class="hljs-title function_">now</span>()-<span class="hljs-keyword">new</span> <span class="hljs-title class_">Date</span>(isoStr).<span class="hljs-title function_">getTime</span>())/<span class="hljs-number">1000</span>;
+    <span class="hljs-keyword">if</span>(diff&lt;<span class="hljs-number">60</span>)<span class="hljs-keyword">return</span> <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">floor</span>(diff)+<span class="hljs-string">'秒前'</span>;
+    <span class="hljs-keyword">if</span>(diff&lt;<span class="hljs-number">3600</span>)<span class="hljs-keyword">return</span> <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">floor</span>(diff/<span class="hljs-number">60</span>)+<span class="hljs-string">'分钟前'</span>;
+    <span class="hljs-keyword">if</span>(diff&lt;<span class="hljs-number">86400</span>)<span class="hljs-keyword">return</span> <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">floor</span>(diff/<span class="hljs-number">3600</span>)+<span class="hljs-string">'小时前'</span>;
+    <span class="hljs-keyword">return</span> <span class="hljs-title class_">Math</span>.<span class="hljs-title function_">floor</span>(diff/<span class="hljs-number">86400</span>)+<span class="hljs-string">'天前'</span>;
+}
+
+<span class="hljs-comment">// 页面加载完成后自动刷新告警</span>
+<span class="hljs-variable language_">document</span>.<span class="hljs-title function_">addEventListener</span>(<span class="hljs-string">'DOMContentLoaded'</span>, <span class="hljs-keyword">function</span>(<span class="hljs-params"></span>){
+    <span class="hljs-title function_">refreshAlerts</span>();
+    <span class="hljs-comment">// 每30秒自动刷新一次</span>
+    <span class="hljs-built_in">setInterval</span>(refreshAlerts, <span class="hljs-number">30000</span>);
+});
+</span><span class="hljs-tag">&lt;/<span class="hljs-name">script</span>&gt;</span>
+<span class="hljs-comment">&lt;!-- ==================== 告警面板结束 ==================== --&gt;</span>
+</div></code></pre>
+<hr>
+<h2 id="%E2%9C%85-%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E6%B8%85%E5%8D%95" tabindex="-1">✅ 执行验证清单</h2>
+<p>完成以上所有步骤后，按顺序执行以下验证命令：</p>
+<h3 id="v1.-%E6%95%B0%E6%8D%AE%E5%BA%93%E8%BF%81%E7%A7%BB" tabindex="-1">V1. 数据库迁移</h3>
+<pre class="hljs"><code><div><span class="hljs-built_in">cd</span> d:\codes\aiops
+python manage.py makemigrations monitoring
+python manage.py migrate
+</div></code></pre>
+<p>预期输出应包含 <code>AlertRule</code>, <code>AlertEvent</code>, <code>AlertSilenceRule</code>, <code>NotificationLog</code> 四张新表。</p>
+<h3 id="v2.-%E9%AA%8C%E8%AF%81-admin-%E5%90%8E%E5%8F%B0" tabindex="-1">V2. 验证 Admin 后台</h3>
+<p>启动服务后访问 <code>http://127.0.0.1:8000/admin/</code>，应能看到新增的：</p>
+<ul>
+<li><strong>预警规则</strong> (AlertRule)</li>
+<li><strong>告警事件</strong> (AlertEvent)</li>
+<li><strong>静默规则</strong> (AlertSilenceRule)</li>
+<li><strong>通知记录</strong> (NotificationLog)</li>
+</ul>
+<h3 id="v3.-%E9%A2%84%E7%BD%AE%E4%B8%80%E6%9D%A1%E6%B5%8B%E8%AF%95%E8%A7%84%E5%88%99" tabindex="-1">V3. 预置一条测试规则</h3>
+<p>通过 Admin 或 API 创建规则:</p>
+<pre class="hljs"><code><div>POST /api/monitoring/rules/create/
+<span class="hljs-punctuation">{</span>
+    <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"CPU高负载告警"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"rule_type"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"threshold"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"severity"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"P1"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"metric_name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"cpu_usage"</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"condition_config"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"operator"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"gt"</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"value"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">90</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"notify_channels"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">"dingtalk"</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+    <span class="hljs-attr">"cooldown_seconds"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">300</span>
+<span class="hljs-punctuation">}</span>
+</div></code></pre>
+<h3 id="v4.-%E6%89%8B%E5%8A%A8%E8%A7%A6%E5%8F%91%E8%A7%84%E5%88%99%E8%AF%84%E4%BC%B0" tabindex="-1">V4. 手动触发规则评估</h3>
+<pre class="hljs"><code><div>python manage.py shell
+&gt;&gt;&gt; from monitoring.engine.rule_evaluator import RuleEvaluator
+&gt;&gt;&gt; RuleEvaluator.evaluate_all()
+</div></code></pre>
+<p>或直接运行 Celery 任务:</p>
+<pre class="hljs"><code><div>celery -A ops_platform worker -l info -B
+<span class="hljs-comment"># 另开终端:</span>
+python manage.py evaluate_rules
+</div></code></pre>
+<h3 id="v5.-%E9%AA%8C%E8%AF%81-dashboard-%E5%91%8A%E8%AD%A6%E9%9D%A2%E6%9D%BF" tabindex="-1">V5. 验证 Dashboard 告警面板</h3>
+<p>访问首页 <code>http://127.0.0.1:8000/</code>，页面底部应出现:</p>
+<ul>
+<li><strong>活跃告警</strong> 表格 (带自动刷新)</li>
+<li><strong>快捷预置规则</strong> 按钮 (一键创建常用规则)</li>
+</ul>
+<h3 id="v6.-%E9%AA%8C%E8%AF%81-api-%E7%AB%AF%E7%82%B9" tabindex="-1">V6. 验证 API 端点</h3>
+<pre class="hljs"><code><div>curl http://127.0.0.1:8000/api/monitoring/alerts/stats/
+<span class="hljs-comment"># 应返回 JSON 统计数据</span>
+</div></code></pre>
+<hr>
+<h2 id="%F0%9F%94%97-%E6%96%87%E4%BB%B6%E4%BE%9D%E8%B5%96%E5%85%B3%E7%B3%BB%E5%9B%BE-(%E6%89%A7%E8%A1%8C%E9%A1%BA%E5%BA%8F)" tabindex="-1">🔗 文件依赖关系图 (执行顺序)</h2>
+<pre class="hljs"><code><div>Step 1: 目录结构 + __init__.py 文件 (无依赖)
+  ↓
+Step 2: models.py (无依赖)
+  ↓
+Step 3: admin.py (依赖 Step 2 的 models)
+  ↓
+Step 4: engine/rule_evaluator.py (依赖 Step 2 的 models)
+  ↓
+Step 5: anomaly_detector.py (无外部依赖)
+  ↓
+Step 6: notification/channel_manager.py (依赖 Step 2 的 models)
+  ↓
+Step 7: api/views.py + urls.py (依赖 Step 2,4,6)
+  ↓
+Step 8: management/commands/evaluate_rules.py (依赖 Step 4)
+  ↓
+Step 9: settings.py + urls.py 修改 (注册所有以上组件)
+  ↓
+Step 10: index.html 增强 (依赖 Step 7 的 API)
+  ↓
+V1: makemigrations + migrate
+V2-V6: 功能验证
+</div></code></pre>
+<hr>
+<h2 id="%E2%9A%A0%EF%B8%8F-%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9" tabindex="-1">⚠️ 注意事项</h2>
+<ol>
+<li>
+<p><strong>cmdb/models.py 中需要确保 ServerGroup 有 ManyToMany 关系字段</strong> 给 AlertRule 使用。如果当前 <code>Server</code> 模型没有 <code>groups</code> 反向关系，需要在 AlertRule 的 M2M 字段中使用 <code>related_name='alert_rules'</code> (已在模型中定义)。如遇 <code>Related name</code> 冲突请调整。</p>
+</li>
+<li>
+<p><strong>SystemConfig 表需存在</strong> 用于存储通知渠道配置。项目已有此表 ([system/models.py](file:///d:/codes/aiops/system/models.py))。</p>
+</li>
+<li>
+<p><strong>Celery Worker 必须运行</strong> 才能处理异步通知任务。确保 Redis 连接正常。</p>
+</li>
+<li>
+<p><strong>首次运行建议先创建预置规则</strong> 再启动采集器，这样采集到的数据会立即被规则评估。</p>
+</li>
+</ol>
+<hr>
+<blockquote>
+<p><strong>文档结束</strong> — 本计划涵盖从零到可运行的完整 Phase 1 开发流程，每段代码均可直接复制使用。</p>
+</blockquote>
+
+    </div>
+
+
+</body></html>

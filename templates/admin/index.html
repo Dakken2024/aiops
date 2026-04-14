@@ -1,0 +1,895 @@
+{% extends "admin/index.html" %}
+{% load i18n %}
+
+{% block title %}{{ site_title }} | {{ title }}{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <span class="ai-brain">🧠</span>
+        <span style="margin-left: 8px; font-weight: 300;">AiOps 智能运维中心</span>
+    </a>
+</h1>
+{% endblock %}
+
+{% block content_title %}<h1>🤖 AI 驱动的智能监控控制台</h1>{% endblock %}
+
+{% block content %}
+<style>
+    {# ===== AIOps Dashboard 核心样式 ===== #}
+    :root {
+        --ai-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --ai-success: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        --ai-warning: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        --ai-danger: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        --ai-info: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        --ai-dark: linear-gradient(135deg, #232526 0%, #414345 100%);
+        --ai-gold: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
+    }
+
+    .aiops-dashboard {
+        margin: 20px 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    {# ===== AI 头部状态条 ===== #}
+    .ai-status-bar {
+        background: var(--ai-dark);
+        border-radius: 16px;
+        padding: 16px 28px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: white;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+    }
+
+    .ai-status-left {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+    }
+
+    .ai-pulse {
+        width: 12px; height: 12px;
+        background: #38ef7d;
+        border-radius: 50%;
+        animation: ai-pulse 2s infinite;
+        box-shadow: 0 0 10px rgba(56,239,125,0.6);
+    }
+    @keyframes ai-pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
+    .ai-model-info {
+        font-size: 13px; opacity: 0.85;
+    }
+
+    .ai-stats-row {
+        display: flex; gap: 30px;
+    }
+    .ai-stat-item {
+        text-align: center;
+    }
+    .ai-stat-value {
+        font-size: 22px; font-weight: 700;
+    }
+    .ai-stat-label {
+        font-size: 11px; opacity: 0.7; text-transform: uppercase;
+    }
+
+    {# ===== 核心指标卡片 ===== #}
+    .ai-grid-4 {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 18px;
+        margin-bottom: 24px;
+    }
+
+    @media (max-width: 1400px) { .ai-grid-4 { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) { .ai-grid-4 { grid-template-columns: 1fr; } }
+
+    .ai-card {
+        border-radius: 16px;
+        padding: 22px 24px;
+        color: white;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        cursor: pointer;
+    }
+    .ai-card:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 0 15px 40px rgba(0,0,0,0.2);
+    }
+    .ai-card::after {
+        content: '';
+        position: absolute;
+        top: -60%; right: -30%;
+        width: 200%; height: 200%;
+        background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .ai-card-alert { background: var(--ai-danger); }
+    .ai-card-server { background: var(--ai-info); }
+    .ai-card-health { background: var(--ai-success); }
+    .ai-card-agent { background: var(--ai-primary); }
+
+    .ai-card-icon {
+        font-size: 36px; margin-bottom: 10px; opacity: 0.95;
+    }
+    .ai-card-value {
+        font-size: 34px; font-weight: 800; line-height: 1.1; letter-spacing: -1px;
+    }
+    .ai-card-label {
+        font-size: 13px; opacity: 0.85; text-transform: uppercase; letter-spacing: 1px; margin-top: 4px;
+    }
+    .ai-card-sub {
+        position: absolute; bottom: 14px; right: 18px;
+        font-size: 11px; opacity: 0.65;
+    }
+    .ai-card-trend {
+        position: absolute; top: 14px; right: 18px;
+        font-size: 20px;
+    }
+
+    {# ===== 主布局：左右分栏 ===== #}
+    .ai-main-layout {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: 20px;
+        margin-bottom: 24px;
+    }
+    @media (max-width: 1200px) { .ai-main-layout { grid-template-columns: 1fr; } }
+
+    .ai-panel {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+        overflow: hidden;
+        border: 1px solid #f0f0f0;
+    }
+
+    .ai-panel-header {
+        padding: 18px 24px;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: linear-gradient(to right, #fafbfc, #fff);
+    }
+    .ai-panel-title {
+        font-size: 15px; font-weight: 700; color: #1a1a1a; margin: 0;
+        display: flex; align-items: center; gap: 8px;
+    }
+    .ai-panel-badge {
+        padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+        background: #e6f7ff; color: #1890ff;
+    }
+    .ai-panel-body { padding: 20px 24px; }
+
+    {# ===== AI 诊断卡片 ===== #}
+    .ai-diagnosis-list { list-style: none; padding: 0; margin: 0; }
+    .ai-diagnosis-item {
+        padding: 14px 0;
+        border-bottom: 1px solid #f5f5f5;
+        display: flex; gap: 14px; align-items: flex-start;
+    }
+    .ai-diagnosis-item:last-child { border-bottom: none; }
+    
+    .di-confidence-ring {
+        min-width: 48px; height: 48px;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 13px; font-weight: 700; color: white;
+    }
+    .conf-high { background: conic-gradient(#52c41a 0deg, #52c41a calc(var(--conf)*360deg), #f0f0f0 calc(var(--conf)*360deg)); }
+    .conf-mid { background: conic-gradient(#faad14 0deg, #faad14 calc(var(--conf)*360deg), #f0f0f0 calc(var(--conf)*360deg)); }
+    .conf-low { background: conic-gradient(#ff4d4f 0deg, #ff4d4f calc(var(--conf)*360deg), #f0f0f0 calc(var(--conf)*360deg)); }
+
+    .di-content { flex: 1; }
+    .di-header {
+        display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+    }
+    .di-server-metric {
+        font-size: 13px; font-weight: 600; color: #262626;
+    }
+    .di-root-cause {
+        font-size: 11px; padding: 2px 8px; border-radius: 8px; font-weight: 500;
+    }
+    .rc-resource { background: #fff1f0; color: #cf1322; }
+    .rc-config { background: #fff7e6; color: #d46b08; }
+    .rc-security { background: #f9f0ff; color: #722ed1; }
+    .rc-noise { background: #f6ffed; color: #389e0d; }
+    .rc-network { background: #e6f7ff; color: #1890ff; }
+    .rc-other { background: #f5f5f5; color: #8c8c8c; }
+
+    .di-analysis {
+        font-size: 12.5px; color: #595959; line-height: 1.6;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .di-meta {
+        display: flex; gap: 12px; margin-top: 8px;
+        font-size: 11px; color: #bfbfbf;
+    }
+
+    {# ===== 异常检测算法分布 ===== #}
+    .method-bar-container { margin-bottom: 12px; }
+    .method-bar-row {
+        display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+    }
+    .method-icon-label {
+        min-width: 120px; font-size: 12px; display: flex; align-items: center; gap: 6px;
+    }
+    .method-bar-track {
+        flex: 1; height: 22px; background: #f5f5f5; border-radius: 11px; overflow: hidden; position: relative;
+    }
+    .method-bar-fill {
+        height: 100%; border-radius: 11px;
+        display: flex; align-items: center; justify-content: flex-end; padding-right: 8px;
+        font-size: 11px; font-weight: 600; color: white; min-width: 36px;
+        transition: width 0.8s ease;
+        background: linear-gradient(90deg, #667eea, #764ba2);
+    }
+    .method-count {
+        min-width: 40px; text-align: right; font-size: 12px; font-weight: 600; color: #8c8c8c;
+    }
+
+    {# ===== 告警关联聚类 ===== #}
+    .cluster-item {
+        display: flex; align-items: center; gap: 14px;
+        padding: 12px 14px; margin-bottom: 8px;
+        background: #fafafa; border-radius: 12px;
+        border-left: 4px solid #1890ff; transition: all 0.2s;
+    }
+    .cluster-item:hover { background: #e6f7ff; transform: translateX(4px); }
+    .cluster-size {
+        min-width: 36px; height: 36px; border-radius: 10px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white; display: flex; align-items: center; justify-content: center;
+        font-size: 14px; font-weight: 700;
+    }
+    .cluster-info { flex: 1; }
+    .cluster-servers { font-size: 12.5px; font-weight: 600; color: #262626; }
+    .cluster-detail { font-size: 11px; color: #8c8c8c; margin-top: 2px; }
+    .cluster-severity {
+        font-size: 11px; padding: 3px 8px; border-radius: 8px; font-weight: 600;
+    }
+
+    {# ===== 根因分布饼图（CSS实现）===== #}
+    .root-cause-chart {
+        display: flex; align-items: center; gap: 20px;
+    }
+    .pie-container {
+        width: 130px; height: 130px; border-radius: 50%;
+        position: relative;
+        background: conic-gradient(
+            {% for rc in root_cause_dist %}
+                {{ rc.color }} 0% {{ rc.pct }}%{% if not forloop.last %},{% endif %}
+            {% endfor %}
+        );
+    }
+    .pie-center {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 70px; height: 70px; background: white; border-radius: 50%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+    }
+    .pie-total { font-size: 18px; font-weight: 700; color: #262626; }
+    .pie-label { font-size: 9px; color: #8c8c8c; }
+    .rc-legend { flex: 1; }
+    .rc-legend-item {
+        display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px;
+    }
+    .rc-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+    .rc-name { color: #595959; flex: 1; }
+    .rc-count { font-weight: 600; color: #262626; }
+
+    {# ===== 自动修复时间线 ===== #}
+    .timeline-item {
+        display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f5f5f5; position: relative;
+    }
+    .timeline-item:last-child { border-bottom: none; }
+    .timeline-dot {
+        width: 32px; height: 32px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px; flex-shrink: 0; position: relative; z-index: 1;
+    }
+    .timeline-dot::before {
+        content: ''; position: absolute; top: 32px; left: 50%; width: 2px; height: calc(100% + 8px);
+        background: #f0f0f0; transform: translateX(-50%);
+    }
+    .timeline-item:last-child .timeline-dot::before { display: none; }
+    .timeline-content { flex: 1; }
+    .timeline-title { font-size: 13px; font-weight: 600; color: #262626; }
+    .timeline-desc { font-size: 11.5px; color: #8c8c8c; margin-top: 2px; }
+    .timeline-time { font-size: 11px; color: #bfbfbf; margin-top: 4px; }
+    .auto-badge {
+        display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 6px;
+        background: #f6ffed; color: #389e0d; font-weight: 600; margin-left: 6px;
+    }
+    .manual-badge {
+        display: inline-block; font-size: 9px; padding: 1px 6px; border-radius: 6px;
+        background: #fff7e6; color: #d46b08; font-weight: 600; margin-left: 6px;
+    }
+
+    {# ===== 知识库推荐 ===== #}
+    .runbook-rec-item {
+        padding: 12px 14px; margin-bottom: 8px; background: #fafafa; border-radius: 10px;
+        border-left: 3px solid #52c41a; transition: all 0.2s;
+    }
+    .runbook-rec-item:hover { background: #f6ffed; transform: translateX(3px); }
+    .rec-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .rec-title { font-size: 13px; font-weight: 600; color: #262626; }
+    .rec-score {
+        font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+        background: #e6f7ff; color: #1890ff;
+    }
+    .rec-preview { font-size: 11.5px; color: #8c8c8c; line-height: 1.5; }
+    .rec-tags { display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap; }
+    .rec-tag { font-size: 10px; padding: 2px 7px; background: white; border-radius: 6px; color: #8c8c8c; }
+
+    {# ===== 趋势图（纯CSS柱状图）===== #}
+    .trend-chart {
+        display: flex; align-items: flex-end; gap: 4px; height: 80px; padding: 10px 0;
+    }
+    .trend-bar-wrapper { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+    .trend-bar {
+        width: 100%; max-width: 28px; border-radius: 4px 4px 0 0;
+        background: linear-gradient(180deg, #667eea, #764ba2);
+        transition: all 0.3s; min-height: 2px;
+        position: relative;
+    }
+    .trend-bar:hover { filter: brightness(1.15); transform: scaleX(1.1); }
+    .trend-bar.current { background: linear-gradient(180deg, #f5576c, #eb3349); }
+    .trend-label { font-size: 9px; color: #bfbfbf; margin-top: 4px; }
+
+    {# ===== 告警列表增强 ===== #}
+    .alert-enhanced-item {
+        display: flex; align-items: center; gap: 14px; padding: 12px 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .alert-enhanced-item:last-child { border-bottom: none; }
+    .alert-severity-indicator {
+        width: 4px; height: 36px; border-radius: 2px; flex-shrink: 0;
+    }
+    .si-critical { background: #cf1322; }
+    si-major { background: #fa8c16; }
+    .si-warning { background: #faad14; }
+    .si-info { background: #52c41a; }
+    .alert-body { flex: 1; }
+    .alert-rule-name { font-size: 13px; font-weight: 600; color: #262626; }
+    .alert-server-metric { font-size: 11.5px; color: #8c8c8c; margin-top: 2px; }
+    .alert-right { text-align: right; }
+    .alert-sev-tag {
+        font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 10px;
+    }
+    .alert-time { font-size: 11px; color: #bfbfbf; margin-top: 4px; }
+
+    {# ===== 健康雷达区域 ===== #}
+    .health-radar-item {
+        display: flex; align-items: center; gap: 12px; padding: 10px 0;
+        border-bottom: 1px solid #f5f5f5;
+    }
+    .health-radar-item:last-child { border-bottom: none; }
+    .health-server-name { font-size: 13px; font-weight: 500; color: #262626; min-width: 100px; }
+    .health-bars { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .health-bar-row { display: flex; align-items: center; gap: 8px; }
+    .health-bar-label { font-size: 10px; color: #bfbfbf; width: 32px; text-align: right; }
+    .health-bar-track { flex: 1; height: 6px; background: #f0f0f0; border-radius: 3px; overflow: hidden; }
+    .health-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+    .hb-cpu { background: linear-gradient(90deg, #667eea, #764ba2); }
+    .hb-mem { background: linear-gradient(90deg, #11998e, #38ef7d); }
+    .hb-disk { background: linear-gradient(90deg, #f093fb, #f5576c); }
+    .hb-overall { background: linear-gradient(90deg, #4facfe, #00f2fe); }
+    .health-grade {
+        min-width: 36px; text-align: center; font-size: 14px; font-weight: 700;
+    }
+    .grade-a { color: #52c41a; }
+    .grade-b { color: #1890ff; }
+    .grade-c { color: #faad14; }
+    .grade-d { color: #ff4d4f; }
+
+    {# ===== 空状态 ===== #}
+    .empty-ai-state {
+        text-align: center; padding: 40px 20px; color: #bfbfbf;
+    }
+    .empty-icon-lg { font-size: 48px; margin-bottom: 12px; opacity: 0.35; }
+    .empty-text { font-size: 13px; }
+    .empty-hint { font-size: 11px; color: #d9d9d9; margin-top: 4px; }
+
+    {# ===== 快速操作网格 ===== #}
+    .quick-actions-grid {
+        display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 16px;
+    }
+    .qa-btn {
+        display: flex; flex-direction: column; align-items: center; padding: 16px 10px;
+        background: #fafafa; border: 1px solid #f0f0f0; border-radius: 12px;
+        text-decoration: none; color: #595959; transition: all 0.25s;
+    }
+    .qa-btn:hover {
+        background: #e6f7ff; border-color: #91d5ff; color: #1890ff;
+        transform: translateY(-2px); box-shadow: 0 4px 12px rgba(24,144,255,0.15);
+    }
+    .qa-icon { font-size: 26px; margin-bottom: 6px; }
+    .qa-label { font-size: 12px; font-weight: 500; }
+
+    {# ===== 动画效果 ===== #}
+    @keyframes slideUp { from {opacity:0;transform:translateY(20px)} to {opacity:1;transform:translateY(0)} }
+    @keyframes fadeIn { from {opacity:0} to {opacity:1} }
+    .animate-in { animation: slideUp 0.5s ease forwards; }
+    .delay-1 { animation-delay: 0.1s; opacity: 0; }
+    .delay-2 { animation-delay: 0.2s; opacity: 0; }
+    .delay-3 { animation-delay: 0.3s; opacity: 0; }
+    .delay-4 { animation-delay: 0.4s; opacity: 0; }
+</style>
+
+<div class="aiops-dashboard">
+
+    {# ==================== AI 状态栏 ==================== #}
+    <div class="ai-status-bar animate-in">
+        <div class="ai-status-left">
+            <div class="ai-pulse"></div>
+            <div>
+                <div style="font-size: 16px; font-weight: 600;">🧠 Qwen3 AI 引擎运行中</div>
+                <div class="ai-model-info">
+                    通义千问驱动 · 异常检测 · 告警聚合 · 根因分析 · 自愈修复
+                </div>
+            </div>
+        </div>
+        <div class="ai-stats-row">
+            <div class="ai-stat-item">
+                <div class="ai-stat-value">{{ stats.ai_total_diagnoses|default:"0" }}</div>
+                <div class="ai-stat-label">AI诊断次数</div>
+            </div>
+            <div class="ai-stat-item">
+                <div class="ai-stat-value">{{ stats.ai_avg_confidence|default:"-" }}</div>
+                <div class="ai-stat-label">平均置信度</div>
+            </div>
+            <div class="ai-stat-item">
+                <div class="ai-stat-value">{{ stats.active_clusters|default:"0" }}</div>
+                <div class="ai-stat-label">活跃告警簇</div>
+            </div>
+            <div class="ai-stat-item">
+                <div class="ai-stat-value">{{ stats.auto_heal_count|default:"0" }}/{{ stats.total_remediations|default:"0" }}</div>
+                <div class="ai-stat-label">自动修复</div>
+            </div>
+        </div>
+    </div>
+
+    {# ==================== 核心指标卡片 ==================== #}
+    <div class="ai-grid-4 animate-in delay-1">
+        <div class="ai-card ai-card-alert" onclick="location.href='/monitoring/admin/monitoring/alertevent/?status__exact=firing'">
+            <span class="ai-card-trend">🔔</span>
+            <div class="ai-card-icon">⚠️</div>
+            <div class="ai-card-value">{{ stats.firing_alerts|default:"0" }}</div>
+            <div class="ai-card-label">活跃告警</div>
+            <div class="ai-card-sub">今日 {{ stats.today_alerts|default:"0" }} 次 | 近1小时 {{ stats.hour_alerts|default:"0" }} 次</div>
+        </div>
+
+        <div class="ai-card ai-card-server" onclick="location.href='/admin/cmdb/server/'">
+            <span class="ai-card-trend">🖥️</span>
+            <div class="ai-card-icon">💻</div>
+            <div class="ai-card-value">{{ stats.total_servers|default:"0" }}</div>
+            <div class="ai-card-label">监控服务器</div>
+            <div class="ai-card-sub">🟢 在线 Agent: {{ stats.active_agents|default:"0" }}</div>
+        </div>
+
+        <div class="ai-card ai-card-health" onclick="location.href='/monitoring/admin/monitoring/healthscore/'">
+            <span class="ai-card-trend">❤️</span>
+            <div class="ai-card-icon">✨</div>
+            <div class="ai-card-value">{{ stats.avg_health_score|default:"-" }}</div>
+            <div class="ai-card-label">平均健康分</div>
+            <div class="ai-card-sub">启用规则: {{ stats.enabled_rules|default:"0" }} 条</div>
+        </div>
+
+        <div class="ai-card ai-card-agent" onclick="location.href='/monitoring/admin/monitoring/remediationhistory/'">
+            <span class="ai-card-trend">🔧</span>
+            <div class="ai-card-icon">🤖</div>
+            <div class="ai-card-value">{{ stats.remediation_success_rate|default:"0" }}%</div>
+            <div class="ai-card-label">自愈成功率</div>
+            <div class="ai-card-sub">知识库: {{ stats.total_runbook_entries|default:"0" }} 条</div>
+        </div>
+    </div>
+
+    {# ==================== 主内容区 ==================== #}
+    <div class="ai-main-layout animate-in delay-2">
+
+        {# ===== 左侧：AI诊断 + 异常算法 + 告警列表 ===== #}
+        <div style="display:flex;flex-direction:column;gap:20px;">
+            
+            {# AI 智能诊断面板 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">
+                        🧠 AI 智能诊断
+                        <span class="ai-panel-badge" style="background:#f0f0ff;color:#722ed1;">Qwen3</span>
+                    </h3>
+                    <a href="/monitoring/admin/monitoring/anomalyhistory/" class="action-link" style="font-size:12px;color:#1890ff;text-decoration:none;">查看全部 →</a>
+                </div>
+                <div class="ai-panel-body" style="padding: 0 24px;">
+                    {% if ai_diagnosis_data %}
+                        <ul class="ai-diagnosis-list">
+                            {% for diag in ai_diagnosis_data %}
+                                <li class="ai-diagnosis-item">
+                                    {% if diag.confidence >= 0.8 %}
+                                        <div class="di-confidence-ring conf-high" style="--conf:{{ diag.confidence }}">{{ diag.confidence|floatformat:0 }}%</div>
+                                    {% elif diag.confidence >= 0.5 %}
+                                        <div class="di-confidence-ring conf-mid" style="--conf:{{ diag.confidence }}">{{ diag.confidence|floatformat:0 }}%</div>
+                                    {% else %}
+                                        <div class="di-confidence-ring conf-low" style="--conf:{{ diag.confidence }}">{{ diag.confidence|floatformat:0 }}%</div>
+                                    {% endif %}
+                                    <div class="di-content">
+                                        <div class="di-header">
+                                            <span class="di-server-metric">
+                                                🔹 {{ diag.server }} · {{ diag.metric }}
+                                            </span>
+                                            <span class="di-root-cause rc-{{ diag.root_cause }}">
+                                                {{ diag.root_cause }}
+                                            </span>
+                                        </div>
+                                        <div class="di-analysis">{{ diag.analysis }}</div>
+                                        <div class="di-meta">
+                                            <span>⏱ {{ diag.analyzed_at|timesince }}前</span>
+                                            <span>⚡ 紧急度: {{ diag.urgency|title }}</span>
+                                        </div>
+                                    </div>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="empty-ai-state">
+                            <div class="empty-icon-lg">🧠</div>
+                            <div class="empty-text">暂无 AI 诊断记录</div>
+                            <div class="empty-hint">当告警触发时，AI 将自动进行根因分析</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# 异常检测算法分布 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">📊 异常检测引擎</h3>
+                    <span style="font-size:12px;color:#8c8c8c;">累计 {{ stats.total_anomalies|default:"0" }} 次检测</span>
+                </div>
+                <div class="ai-panel-body">
+                    {% if anomaly_method_stats %}
+                        {% for method in anomaly_method_stats %}
+                        <div class="method-bar-container">
+                            <div class="method-bar-row">
+                                <div class="method-icon-label">
+                                    <span>{{ method.icon }}</span>
+                                    <span>{{ method.label }}</span>
+                                </div>
+                                <div class="method-bar-track">
+                                    <div class="method-bar-fill" style="width: {{ method.percentage }}%">
+                                        {{ method.percentage }}%
+                                    </div>
+                                </div>
+                                <div class="method-count">{{ method.count }} 次</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-ai-state">
+                            <div class="empty-icon-lg">📈</div>
+                            <div class="empty-text">暂无异常检测数据</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# 最近告警 + 趋势 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">🚨 实时告警流</h3>
+                    <a href="/monitoring/admin/monitoring/alertevent/" class="action-link" style="font-size:12px;color:#1890ff;text-decoration:none;">全部 →</a>
+                </div>
+                <div class="ai-panel-body" style="padding: 16px 24px;">
+                    {% if trend_data %}
+                        <div style="margin-bottom: 16px;">
+                            <div style="font-size:11px;color:#8c8c8c;margin-bottom:8px;">📈 12小时告警趋势</div>
+                            <div class="trend-chart">
+                                {% for t in trend_data %}
+                                    <div class="trend-bar-wrapper">
+                                        <div class="trend-bar {% if forloop.last %}current{% endif %}" 
+                                             style="height: {% if trend_data %}{% widthratio t.alerts 5 60 %}{% else %}2{% endif %}px;"
+                                             title="{{ t.time }}: {{ t.alerts }} 条"></div>
+                                        <div class="trend-label">{{ t.time }}</div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    {% if recent_alerts %}
+                        {% for alert in recent_alerts|slice:":6" %}
+                        <div class="alert-enhanced-item">
+                            <div class="alert-severity-indicator si-{{ alert.severity|lower }}"></div>
+                            <div class="alert-body">
+                                <div class="alert-rule-name">{{ alert.rule.name }}</div>
+                                <div class="alert-server-metric">
+                                    {% if alert.server %}{{ alert.server.hostname }}{% endif %} · 
+                                    {{ alert.metric_name }} = {{ alert.current_value }}
+                                </div>
+                            </div>
+                            <div class="alert-right">
+                                <span class="alert-sev-tag" style="
+                                    {% if alert.severity == 'P0' %}background:#fff1f0;color:#cf1322;border:1px solid #ffa39e;
+                                    {% elif alert.severity == 'P1' %}background:#fff7e6;color:#d46b08;border:1px solid #ffd591;
+                                    {% elif alert.severity == 'P2' %}background:#fffbe6;color:#d48806;border:1px solid #ffe58f;
+                                    {% else %}background:#f6ffed;color:#389e0d;border:1px solid #b7eb8f;{% endif %}">
+                                    {{ alert.get_severity_display }}
+                                </span>
+                                <div class="alert-time">{{ alert.fired_at|timesince }}前</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-ai-state">
+                            <div class="empty-icon-lg">🎉</div>
+                            <div class="empty-text">系统运行正常，暂无告警</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {# ===== 右侧：根因分析 + 告警聚类 + 修复时间线 + 知识库 ===== #}
+        <div style="display:flex;flex-direction:column;gap:20px;">
+
+            {# 根因分类分布 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">🎯 AI 根因分类</h3>
+                    <span style="font-size:12px;color:#8c8c8c;">共 {{ stats.ai_root_cause_total|default:"0" }} 例</span>
+                </div>
+                <div class="ai-panel-body">
+                    {% if root_cause_dist %}
+                        <div class="root-cause-chart">
+                            <div class="pie-container">
+                                <div class="pie-center">
+                                    <div class="pie-total">{{ stats.ai_root_cause_total|default:"0" }}</div>
+                                    <div class="pie-label">总诊断</div>
+                                </div>
+                            </div>
+                            <div class="rc-legend">
+                                {% for rc in root_cause_dist %}
+                                    <div class="rc-legend-item">
+                                        <div class="rc-dot" style="background:{{ rc.color }}"></div>
+                                        <span class="rc-name">{{ rc.icon }} {{ rc.name }}</span>
+                                        <span class="rc-count">{{ rc.count }} ({{ rc.pct }}%)</span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="empty-ai-state">
+                            <div class="empty-icon-lg">🎯</div>
+                            <div class="empty-text">等待 AI 诊断数据积累...</div>
+                            <div class="empty-hint">告警触发后将自动生成根因分析</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# 告警关联聚类 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">🔗 告警关联聚类</h3>
+                    <span class="ai-panel-badge" style="background:#f9f0ff;color:#722ed1;">实时</span>
+                </div>
+                <div class="ai-panel-body" style="padding: 12px 20px;">
+                    {% if alert_clusters %}
+                        {% for cluster in alert_clusters %}
+                        <div class="cluster-item" style="border-left-color:
+                            {% if cluster.max_severity == 'P0' %}#cf1322
+                            {% elif cluster.max_severity == 'P1' %}#fa8c16
+                            {% elif cluster.max_severity == 'P2' %}#faad14
+                            {% else %}%52c41a{% endif %}">
+                            <div class="cluster-size">{{ cluster.size }}</div>
+                            <div class="cluster-info">
+                                <div class="cluster-servers">🖥️ {{ cluster.servers }}</div>
+                                <div class="cluster-detail">{{ cluster.metrics }} · {{ cluster.top_alert }} · {{ cluster.time }}</div>
+                            </div>
+                            <span class="cluster-severity" style="
+                                {% if cluster.max_severity == 'P0' %}background:#fff1f0;color:#cf1322
+                                {% elif cluster.max_severity == 'P1' %}background:#fff7e6;color:#d46b08
+                                {% elif cluster.max_severity == 'P2' %}background:#fffbe6;color:#d48806
+                                {% else %}background:#f6ffed;color:#389e0d{% endif %}">
+                                {{ cluster.max_severity }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-ai-state" style="padding:24px 12px;">
+                            <div class="empty-icon-lg" style="font-size:36px;">🔗</div>
+                            <div class="empty-text" style="font-size:12px;">当前无关联告警簇</div>
+                            <div class="empty-hint">相关告警将自动聚合显示</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# 自动修复时间线 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">🔧 自愈修复时间线</h3>
+                    <a href="/monitoring/admin/monitoring/remediationhistory/" class="action-link" style="font-size:12px;color:#1890ff;text-decoration:none;">详情 →</a>
+                </div>
+                <div class="ai-panel-body" style="padding: 12px 20px;">
+                    {% if remediation_timeline %}
+                        {% for item in remediation_timeline %}
+                        <div class="timeline-item">
+                            <div class="timeline-dot" style="background:{{ item.status_color }};color:white;">
+                                {{ item.status_icon }}
+                            </div>
+                            <div class="timeline-content">
+                                <div class="timeline-title">
+                                    {{ item.action_name }}
+                                    {% if item.is_auto %}
+                                        <span class="auto-badge">AUTO</span>
+                                    {% else %}
+                                        <span class="manual-badge">MANUAL</span>
+                                    {% endif %}
+                                </div>
+                                <div class="timeline-desc">
+                                    🖥️ {{ item.server }} · {{ item.alert_rule }}
+                                    {% if item.duration %}· ⏱ {{ item.duration }}{% endif %}
+                                </div>
+                                <div class="timeline-time">{{ item.started_at|date:"m-d H:i:s" }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="empty-ai-state" style="padding:24px 12px;">
+                            <div class="empty-icon-lg" style="font-size:36px;">🔧</div>
+                            <div class="empty-text" style="font-size:12px;">暂无修复记录</div>
+                            <div class="empty-hint">告警触发时自动执行修复动作</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {# 知识库智能推荐 #}
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">📚 知识库智能推荐</h3>
+                    <span class="ai-panel-badge" style="background:#f6ffed;color:#389e0d;">AI匹配</span>
+                </div>
+                <div class="ai-panel-body" style="padding: 12px 20px;">
+                    {% if runbook_recommendations %}
+                        {% for rec in runbook_recommendations %}
+                        <div class="runbook-rec-item">
+                            <div class="rec-header">
+                                <span class="rec-title">{{ rec.title }}</span>
+                                <span class="rec-score">匹配 {{ rec.score|floatformat:0 }}%</span>
+                            </div>
+                            <div class="rec-preview">{{ rec.solution|truncatechars:80 }}</div>
+                            <div class="rec-tags">
+                                {% for tag in rec.tags|slice:":3" %}
+                                    <span class="rec-tag">#{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% elif stats.runbook_for_alert %}
+                        <div class="empty-ai-state" style="padding:24px 12px;">
+                            <div class="empty-icon-lg" style="font-size:36px;">📚</div>
+                            <div class="empty-text" style="font-size:12px;">
+                                当前告警: {{ stats.runbook_for_alert.server }} - {{ stats.runbook_for_alert.metric }}
+                            </div>
+                            <div class="empty-hint">正在搜索匹配的知识库解决方案...</div>
+                        </div>
+                    {% else %}
+                        <div class="empty-ai-state" style="padding:24px 12px;">
+                            <div class="empty-icon-lg" style="font-size:36px;">📚</div>
+                            <div class="empty-text" style="font-size:12px;">知识库待激活</div>
+                            <div class="empty-hint">有活跃告警时将自动推荐解决方案</div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ==================== 底部：服务器健康 + 快速操作 ==================== #}
+    <div class="ai-main-layout animate-in delay-3" style="margin-top:0;">
+        
+        {# 服务器健康概览 #}
+        <div class="ai-panel">
+            <div class="ai-panel-header">
+                <h3 class="ai-panel-title">🏥 服务器多维健康评估</h3>
+                <a href="/monitoring/admin/monitoring/healthscore/" class="action-link" style="font-size:12px;color:#1890ff;text-decoration:none;">详情 →</a>
+            </div>
+            <div class="ai-panel-body">
+                {% if health_overview %}
+                    {% for h in health_overview|slice:":5" %}
+                    <div class="health-radar-item">
+                        <div class="health-server-name">{{ h.server.hostname }}</div>
+                        <div class="health-bars">
+                            <div class="health-bar-row">
+                                <span class="health-bar-label">CPU</span>
+                                <div class="health-bar-track"><div class="health-bar-fill hb-cpu" style="width:{{ h.cpu_score }}%"></div></div>
+                            </div>
+                            <div class="health-bar-row">
+                                <span class="health-bar-label">MEM</span>
+                                <div class="health-bar-track"><div class="health-bar-fill hb-mem" style="width:{{ h.mem_score }}%"></div></div>
+                            </div>
+                            <div class="health-bar-row">
+                                <span class="health-bar-label">DISK</span>
+                                <div class="health-bar-track"><div class="health-bar-fill hb-disk" style="width:{{ h.disk_score }}%"></div></div>
+                            </div>
+                        </div>
+                        <div class="health-grade grade-{% if h.overall_score >= 80 %}a{% elif h.overall_score >= 60 %}b{% elif h.overall_score >= 40 %}c{% else %}d{% endif %}">
+                            {{ h.grade }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-ai-state">
+                        <div class="empty-icon-lg">📊</div>
+                        <div class="empty-text">暂无健康评分数据</div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# 快速操作 + 系统信息 #}
+        <div style="display:flex;flex-direction:column;gap:20px;">
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">⚡ AIOps 操作中心</h3>
+                </div>
+                <div class="ai-panel-body">
+                    <div class="quick-actions-grid">
+                        <a href="/monitoring/admin/monitoring/alertrule/add/" class="qa-btn">
+                            <span class="qa-icon">➕</span><span class="qa-label">新建规则</span>
+                        </a>
+                        <a href="/monitoring/admin/monitoring/detectorconfig/" class="qa-btn">
+                            <span class="qa-icon">🎛️</span><span class="qa-label">检测配置</span>
+                        </a>
+                        <a href="/monitoring/admin/monitoring/remediationaction/" class="qa-btn">
+                            <span class="qa-icon">🔧</span><span class="qa-label">修复动作</span>
+                        </a>
+                        <a href="/monitoring/admin/monitoring/runbookentry/add/" class="qa-btn">
+                            <span class="qa-icon">📝</span><span class="qa-label">知识录入</span>
+                        </a>
+                        <a href="/monitoring/admin/monitoring/silencerule/" class="qa-btn">
+                            <span class="qa-icon">🔇</span><span class="qa-label">静默规则</span>
+                        </a>
+                        <a href="/monitoring/admin/monitoring/agenttoken/" class="qa-btn">
+                            <span class="qa-icon">🔑</span><span class="qa-label">Agent管理</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ai-panel">
+                <div class="ai-panel-header">
+                    <h3 class="ai-panel-title">ℹ️ 系统概况</h3>
+                </div>
+                <div class="ai-panel-body">
+                    <table style="width:100%;font-size:12.5px;">
+                        <tr><td style="padding:7px 0;color:#8c8c8c;">Django</td><td style="padding:7px 0;font-weight:600;">{{ django_version }}</td></tr>
+                        <tr><td style="padding:7px 0;color:#8c8c8c;">数据库</td><td style="padding:7px 0;font-weight:600;">{{ db_engine|default:"PostgreSQL" }}</td></tr>
+                        <tr><td style="padding:7px 0;color:#8c8c8c;">通知渠道</td><td style="padding:7px 0;font-weight:600;">{{ stats.active_channels|default:"-" }}</td></tr>
+                        <tr><td style="padding:7px 0;color:#8c8c8c;">今日告警</td><td style="padding:7px 0;font-weight:600;color:#cf1322;">{{ stats.today_alerts|default:"0" }} 次</td></tr>
+                        <tr><td style="padding:7px 0;color:#8c8c8c;">AI高置信</td><td style="padding:7px 0;font-weight:600;color:#52c41a;">{{ stats.ai_high_conf_count|default:"0" }} 条</td></tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('%c🧠 AiOps Intelligent Dashboard (Powered by Qwen3)', 
+        'color: #722ed1; font-size: 16px; font-weight: bold;');
+    console.log('%c✅ AI Engine: Qwen3 | Anomaly Detection | Alert Correlation | Root Cause Analysis | Auto-Remediation', 
+        'color: #52c41a; font-size: 11px;');
+});
+</script>
+{% endblock %}

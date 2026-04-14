@@ -1,0 +1,321 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    .pod-name { font-weight: 600; color: #333; }
+    .pod-ip { font-size: 12px; color: #999; }
+
+    /* Markdown 样式 */
+    .markdown-body { font-size: 14px; line-height: 1.6; }
+    .markdown-body pre { background: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
+
+    /* 实时日志终端样式 */
+    .log-terminal {
+        height: 600px;
+        background-color: #1e1e1e;
+        color: #f0f0f0;
+        overflow-y: auto;
+        padding: 15px;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 13px;
+        white-space: pre-wrap; /* 保留换行 */
+        border-radius: 4px;
+    }
+</style>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-cubes text-primary mr-2"></i>
+                    {% if current_cluster %}
+                        {{ current_cluster.name }}
+                        {% if current_namespace %}
+                            <small class="text-muted">/ {{ current_namespace }}</small>
+                        {% endif %}
+                    {% else %}
+                        未选择集群
+                    {% endif %}
+                </h4>
+
+                <div class="form-inline">
+                    <a href="{% url 'k8s_cluster_list' %}" class="btn btn-sm btn-outline-secondary mr-2">
+                        <i class="fas fa-cog"></i> 管理集群
+                    </a>
+
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id='+this.value" style="min-width: 150px;">
+                        {% for c in clusters %}
+                            <option value="{{ c.id }}" {% if current_cluster and current_cluster.id == c.id %}selected{% endif %}>
+                                {{ c.name }}
+                            </option>
+                        {% empty %}
+                            <option disabled>暂无集群</option>
+                        {% endfor %}
+                    </select>
+
+                    <select class="form-control" onchange="changeNamespace(this.value)" style="min-width: 150px;">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}
+                            <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>
+                                {{ ns }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible">
+    <button type="button" class="close" data-dismiss="alert">×</button>
+    <i class="icon fas fa-ban"></i> {{ error }}
+</div>
+{% endif %}
+
+<div class="card card-primary card-outline">
+    <div class="card-header">
+        <h3 class="card-title">容器列表 (Pods)</h3>
+        <div class="card-tools">
+            <span class="badge badge-light">Total: {{ pods|length }}</span>
+        </div>
+    </div>
+
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Pod Name / IP</th>
+                    <th>Node</th>
+                    <th>状态</th>
+                    <th>重启</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in pods %}
+                <tr>
+                    <td><span class="badge badge-light border">{{ p.namespace }}</span></td>
+                    <td>
+                        <div class="pod-name">{{ p.name }}</div>
+                        <div class="pod-ip"><i class="fas fa-network-wired"></i> {{ p.ip }}</div>
+                    </td>
+                    <td>{{ p.node }}</td>
+                    <td>
+                        {% if p.status == 'Running' %}
+                            <span class="badge badge-success">Running</span>
+                        {% elif p.status == 'OOMKilled' %}
+                            <span class="badge badge-danger">OOMKilled</span>
+                            <div class="text-danger text-xs mt-1"><i class="fas fa-exclamation-triangle"></i> 内存溢出</div>
+                        {% elif p.status == 'Pending' %}
+                            <span class="badge badge-warning">Pending</span>
+                        {% else %}
+                            <span class="badge badge-secondary">{{ p.status }}</span>
+                            {% if p.reason %}<div class="text-xs text-muted">{{ p.reason }}</div>{% endif %}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if p.restarts > 0 %}
+                            <span class="text-danger font-weight-bold">{{ p.restarts }}</span>
+                        {% else %}
+                            <span class="text-muted">0</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-muted text-sm">{{ p.age|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <button class="btn btn-xs btn-outline-primary" onclick="diagnosePod('{{ p.name }}', '{{ p.namespace }}')">
+                            <i class="fas fa-user-md"></i> 诊断
+                        </button>
+
+                        <button class="btn btn-xs btn-info" onclick="openLogModal('{{ p.name }}', '{{ p.namespace }}')">
+                            <i class="fas fa-file-alt"></i> 实时日志
+                        </button>
+
+                        <a href="javascript:void(0);" onclick="openShell('{{ p.name }}', '{{ p.namespace }}')" class="btn btn-xs btn-dark">
+                            <i class="fas fa-terminal"></i> Shell
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">
+                        {% if error %}
+                            <i class="fas fa-unlink fa-3x mb-3"></i><br>连接失败
+                        {% else %}
+                            <i class="fas fa-box-open fa-3x mb-3"></i><br>暂无 Pod
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="k8sModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white"><i class="fas fa-robot mr-1"></i> 容器智能诊断</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="small text-muted">选择分析模型：</label>
+                    <select id="k8sModelSelect" class="form-control form-control-sm">
+                        {% for m in ai_models %}
+                        <option value="{{ m.id }}">{{ m.name }}</option>
+                        {% empty %}
+                        <option value="">默认模型</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div id="k8sLoading" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-3 text-muted">正在拉取日志和堆栈信息，请稍候...</p>
+                </div>
+                <div id="k8sContent" class="markdown-body" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logModal" tabindex="-1" data-backdrop="static">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-dark">
+                <h5 class="modal-title text-white">
+                    <i class="fas fa-file-alt mr-2"></i>实时日志: <span id="logPodName" class="text-warning font-weight-bold"></span>
+                </h5>
+                <button type="button" class="close text-white" onclick="closeLogModal()">&times;</button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="logTerminal" class="log-terminal"></div>
+            </div>
+            <div class="modal-footer bg-light py-1">
+                <small class="text-muted mr-auto"><i class="fas fa-info-circle"></i> 日志通过 WebSocket 实时流式传输</small>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="closeLogModal()">关闭连接</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let logSocket = null;
+    const currentClusterId = "{{ current_cluster.id|default:'' }}";
+
+    // 切换命名空间
+    function changeNamespace(ns) {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (ns) urlParams.set('namespace', ns);
+        else urlParams.delete('namespace');
+        window.location.search = urlParams.toString();
+    }
+
+    // AI 诊断逻辑
+    function diagnosePod(name, ns) {
+        $('#k8sModal').modal('show');
+        $('#k8sContent').hide();
+        $('#k8sLoading').show();
+
+        const modelId = $('#k8sModelSelect').val();
+
+        $.ajax({
+            url: '{% url "k8s_diagnose" %}',
+            type: 'POST',
+            data: {
+                'cluster_id': currentClusterId,
+                'pod_name': name,
+                'namespace': ns,
+                'model_id': modelId
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(res) {
+                $('#k8sLoading').hide();
+                if(res.status) {
+                    $('#k8sContent').html(marked.parse(res.analysis)).show();
+                } else {
+                    $('#k8sContent').html('<span class="text-danger">' + res.msg + '</span>').show();
+                }
+            },
+            error: function() {
+                $('#k8sLoading').hide();
+                $('#k8sContent').html('<span class="text-danger">请求失败，请检查网络</span>').show();
+            }
+        });
+    }
+
+    // === 实时日志 WebSocket 逻辑 ===
+    function openLogModal(podName, namespace) {
+        if (!currentClusterId) {
+            alert("未选择集群");
+            return;
+        }
+
+        $('#logPodName').text(podName);
+        $('#logTerminal').html('<span class="text-muted">正在连接日志流...</span>\n');
+        $('#logModal').modal('show');
+
+        // 构建 WebSocket URL
+        // 格式: /ws/k8s/log/<cluster_id>/<namespace>/<pod_name>/
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const url = `${wsScheme}://${window.location.host}/ws/k8s/log/${currentClusterId}/${namespace}/${podName}/`;
+
+        // 建立连接
+        if (logSocket) logSocket.close();
+        logSocket = new WebSocket(url);
+
+        logSocket.onopen = function() {
+            $('#logTerminal').append('<span class="text-success">连接成功，等待数据...</span>\n');
+        };
+
+        logSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            const terminal = document.getElementById('logTerminal');
+            // 追加日志内容
+            if (data.data) {
+                terminal.innerHTML += data.data;
+                // 保持滚动在底部
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        };
+
+        logSocket.onclose = function() {
+            $('#logTerminal').append('\n<span class="text-warning">[System] Connection closed.</span>');
+        };
+
+        logSocket.onerror = function() {
+            $('#logTerminal').append('\n<span class="text-danger">[System] Connection error.</span>');
+        };
+    }
+
+    // 关闭日志窗口并断开连接
+    function closeLogModal() {
+        if (logSocket) {
+            logSocket.close();
+            logSocket = null;
+        }
+        $('#logModal').modal('hide');
+    }
+
+    // 监听模态框隐藏事件（处理按ESC或点击背景关闭的情况）
+    $('#logModal').on('hidden.bs.modal', function () {
+        if (logSocket) {
+            logSocket.close();
+            logSocket = null;
+        }
+    });
+
+    // 打开 Shell (保持不变)
+    function openShell(name, ns) {
+        const url = `{% url 'k8s_pod_terminal' 'POD_PLACEHOLDER' %}?cluster_id=${currentClusterId}&namespace=${ns}`.replace('POD_PLACEHOLDER', name);
+        window.open(url, 'k8s_shell', 'width=900,height=600');
+    }
+</script>
+{% endblock %}

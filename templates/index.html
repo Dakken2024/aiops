@@ -1,0 +1,1346 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    /* === 仪表盘自定义样式 === */
+    .dashboard-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: 100%; position: relative; transition: all 0.3s; }
+    .dashboard-card:hover { box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+
+    /* 顶部指标卡片 */
+    .metric-card { padding: 20px; overflow: hidden; }
+    .metric-title { color: #666; font-size: 14px; margin-bottom: 10px; display: flex; justify-content: space-between; }
+    .metric-value { font-size: 32px; font-weight: 600; color: #333; font-family: 'Segoe UI', sans-serif; }
+    .metric-unit { font-size: 14px; color: #999; margin-left: 4px; font-weight: normal; }
+    .metric-chart { height: 40px; width: 100%; position: absolute; bottom: 0; left: 0; }
+
+    /* 状态徽章 */
+    .status-badge { font-size: 12px; padding: 2px 6px; border-radius: 4px; }
+    .status-good { color: #52c41a; background: #f6ffed; }
+    .status-warn { color: #faad14; background: #fffbe6; }
+
+    /* 卡片标题栏 */
+    .card-header-custom {
+        padding: 15px 20px; border-bottom: 1px solid #f0f0f0;
+        font-weight: 600; color: #333;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+
+    /* 系统信息网格 */
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+    .info-item { background: #f8f9fa; padding: 15px; border-radius: 6px; }
+    .info-label { color: #888; font-size: 12px; margin-bottom: 4px; }
+    .info-val { color: #333; font-weight: 500; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* 顶部下拉框 */
+    .server-select { border: 1px solid #d9d9d9; border-radius: 4px; padding: 5px 10px; min-width: 220px; outline: none; background: #fff; }
+
+    /* AI 结果样式 */
+    .markdown-body { font-size: 14px; line-height: 1.6; color: #333; }
+    .markdown-body p { margin-bottom: 10px; }
+    .markdown-body ul { padding-left: 20px; }
+    .markdown-body pre { background: #f4f4f4; padding: 10px; border-radius: 4px; overflow-x: auto; }
+
+    /* 无数据提示样式 */
+    .no-agent-box {
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        height: 100%; color: #999; text-align: center; padding: 40px;
+    }
+    .no-agent-icon { font-size: 48px; margin-bottom: 15px; color: #faad14; }
+</style>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    {% if current_server_id %}
+                        <i class="fas fa-server text-primary mr-2"></i>{{ sys_info.hostname }}
+                    {% else %}
+                        <i class="fas fa-th-large text-primary mr-2"></i>集群概览
+                    {% endif %}
+                </h4>
+
+                <div class="form-inline">
+                    <label class="mr-2 text-muted font-weight-normal">监控视图：</label>
+                    <select class="server-select" onchange="window.location.href='?server_id='+this.value">
+                        <option value="" {% if not current_server_id %}selected{% endif %}>--- 集群聚合 (Cluster Avg) ---</option>
+                        {% for s in all_servers %}
+                        <option value="{{ s.id }}" {% if current_server_id == s.id %}selected{% endif %}>
+                            {{ s.hostname }} ({{ s.ip_address }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <a id="btn-export-pdf" class="btn btn-sm btn-outline-success ml-2" href="/api/monitoring/export/report/pdf/?range=24h{% if current_server_id %}&server_id={{current_server_id}}{% endif %}" target="_blank">
+                        <i class="fas fa-file-pdf mr-1"></i>导出报告
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">
+                CPU 使用率 <span class="status-badge status-good">{% if current_server_id %}Node{% else %}Avg{% endif %}</span>
+            </div>
+            <div class="metric-value">
+                {% if sys_info.has_agent %}
+                    {{ metrics.cpu }}<span class="metric-unit">%</span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </div>
+            <div id="spark-cpu" class="metric-chart"></div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">
+                内存使用率 <span class="status-badge status-warn">{% if current_server_id %}Node{% else %}Avg{% endif %}</span>
+            </div>
+            <div class="metric-value">
+                {% if sys_info.has_agent %}
+                    {{ metrics.mem }}<span class="metric-unit">%</span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </div>
+            <div id="spark-mem" class="metric-chart"></div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">
+                系统健康度 <span class="status-badge status-good">Score</span>
+            </div>
+            <div class="metric-value">
+                {% if sys_info.has_agent %}
+                    {{ metrics.health }}<span class="metric-unit">分</span>
+                {% else %}
+                    <span class="text-muted">-</span>
+                {% endif %}
+            </div>
+            <div id="spark-health" class="metric-chart"></div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <a href="{% url 'server_list' %}" style="text-decoration: none;">
+            <div class="dashboard-card metric-card" style="cursor: pointer;">
+                <div class="metric-title">
+                    在线服务器 <span class="status-badge status-good">Running</span>
+                </div>
+                <div class="metric-value">
+                    {{ running_count }} <span style="font-size:16px; color:#999;">/ {{ server_count }}</span>
+                </div>
+                <div style="height: 4px; background: #f0f0f0; position: absolute; bottom: 0; left: 0; width: 100%;">
+                    <div style="height: 100%; background: #52c41a; width: {{ metrics.online_rate }}%;"></div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-info-circle text-muted mr-1"></i> 系统详细信息</span>
+
+                {% if current_server_id and sys_info.has_agent %}
+                <button class="btn btn-sm btn-outline-primary" onclick="openDiagnoseModal()">
+                    <i class="fas fa-user-md mr-1"></i>AI 智能诊断
+                </button>
+                {% elif not sys_info.has_agent %}
+                <span class="badge badge-warning font-weight-normal">数据未接入</span>
+                {% else %}
+                <span class="badge badge-light text-muted font-weight-normal">切换到单机视图可使用诊断</span>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="info-label">主机名</div>
+                        <div class="info-val" title="{{ sys_info.hostname }}">{{ sys_info.hostname }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">操作系统</div>
+                        <div class="info-val" title="{{ sys_info.os }}">{{ sys_info.os }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">CPU 规格 / 架构</div>
+                        <div class="info-val" title="{{ sys_info.cpu_model }}">{{ sys_info.cpu_model }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">IP 地址</div>
+                        <div class="info-val">{{ sys_info.ip|default:'-' }}</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">运行状态 / 核心数</div>
+                        <div class="info-val">
+                            <i class="fas fa-circle text-success" style="font-size: 8px;"></i> {{ sys_info.uptime }}
+                            / {{ sys_info.cores }} Cores
+                        </div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">
+                            {% if current_server_id %}
+                                平均负载 (Load 1min)
+                            {% else %}
+                                集群平均负载 (Avg Load)
+                            {% endif %}
+                        </div>
+                        <div class="info-val">
+                            {{ sys_info.load }}
+                            {% if not current_server_id %}
+                                <small class="text-muted" style="font-weight:normal;">(均值)</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if sys_info.has_agent %}
+        <div class="col-md-3">
+            <div class="dashboard-card">
+                <div class="card-header-custom">实时负载 (Load)</div>
+                <div class="card-body d-flex justify-content-center align-items-center" style="height: 200px;">
+                    <div id="chart-load" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="dashboard-card">
+                <div class="card-header-custom">磁盘使用率 (Disk /)</div>
+                <div class="card-body d-flex justify-content-center align-items-center" style="height: 200px;">
+                    <div id="chart-disk" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
+        </div>
+    {% else %}
+        <div class="col-md-6">
+            <div class="dashboard-card">
+                <div class="card-header-custom">监控状态</div>
+                <div class="no-agent-box">
+                    <div class="no-agent-icon"><i class="fas fa-microchip"></i></div>
+                    <h5>未安装监控 Agent</h5>
+                    <p class="text-muted small mb-3">该服务器尚未向平台发送任何监控数据。<br>请前往主机列表部署 Agent。</p>
+                    <a href="{% url 'server_list' %}" class="btn btn-primary btn-sm px-4">去安装</a>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+{% if sys_info.has_agent %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span>资源使用趋势 (CPU & Memory)</span>
+            </div>
+            <div class="card-body">
+                <div id="chart-trend" style="width: 100%; height: 320px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span>网络流量趋势 (Inbound & Outbound)</span>
+            </div>
+            <div class="card-body">
+                <div id="chart-network" style="width: 100%; height: 320px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span>磁盘读写趋势 (Disk I/O)</span>
+            </div>
+            <div class="card-body">
+                <div id="chart-disk-io" style="width: 100%; height: 320px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-8">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-exclamation-triangle text-warning mr-1"></i>异常事件时间线</span>
+                <small class="text-muted">最近7天</small>
+            </div>
+            <div class="card-body" style="max-height:300px;overflow-y:auto;">
+                <div id="anomaly-timeline-container">
+                    <p class="text-muted text-center py-4"><i class="fas fa-spinner fa-spin mr-2"></i>加载中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span>异常统计</span>
+            </div>
+            <div class="card-body">
+                <div id="anomaly-stats-container">
+                    <p class="text-muted text-center py-4">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="anomalyDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-dark">
+                <h5 class="modal-title text-white"><i class="fas fa-search-plus mr-2"></i>异常详情</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="anomalyDetailBody">
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-trophy text-warning mr-1"></i>资源 Top 10</span>
+                <div class="btn-group btn-group-xs" role="group">
+                    <button type="button" class="btn btn-outline-primary btn-xs active" onclick="loadTopN('cpu_usage',this)">CPU</button>
+                    <button type="button" class="btn btn-outline-primary btn-xs" onclick="loadTopN('mem_usage',this)">内存</button>
+                    <button type="button" class="btn btn-outline-primary btn-xs" onclick="loadTopN('disk_usage',this)">磁盘</button>
+                    <button type="button" class="btn btn-outline-primary btn-xs" onclick="loadTopN('load_1min',this)">负载</button>
+                </div>
+            </div>
+            <div class="card-body p-0" style="max-height:320px;overflow-y:auto;">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="thead-light sticky-top"><tr><th width="40">#</th><th>主机名</th><th width="80">数值</th><th width="120">占比</th></tr></thead>
+                    <tbody id="topn-tbody"><tr><td colspan="4" class="text-center text-muted py-3">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span>时间范围 & 状态</span>
+                <div class="btn-group btn-group-xs" role="group">
+                    <button type="button" class="btn btn-outline-secondary btn-xs" onclick="changeTimeRange('1h',this)">1h</button>
+                    <button type="button" class="btn btn-outline-secondary btn-xs active" onclick="changeTimeRange('24h',this)">24h</button>
+                    <button type="button" class="btn btn-outline-secondary btn-xs" onclick="changeTimeRange('7d',this)">7d</button>
+                    <button type="button" class="btn btn-outline-secondary btn-xs" onclick="changeTimeRange('30d',this)">30d</button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                        <tr><td class="w-40 text-muted">当前范围:</td><td id="current-range-label">24小时</td></tr>
+                        <tr><td class="text-muted">数据点数:</td><td id="range-data-count">-</td></tr>
+                        <tr><td class="text-muted">均值:</td><td id="range-avg">-</td></tr>
+                        <tr><td class="text-muted">峰值:</td><td id="range-max">-</td></tr>
+                        <tr><td class="text-muted">谷值:</td><td id="range-min">-</td></tr>
+                        <tr><td class="text-muted">WebSocket:</td><td><span id="ws-status" class="badge badge-secondary">未连接</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-chart-line text-primary mr-1"></i>运维统计大屏</span>
+                <button class="btn btn-outline-primary btn-xs" onclick="loadDashboardOverview()"><i class="fas fa-sync-alt"></i> 刷新</button>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0 text-primary" id="dash-servers-total">-</div>
+                            <small class="text-muted">服务器总数</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0 text-success" id="dash-servers-up">-</div>
+                            <small class="text-muted">在线</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0 text-danger" id="dash-alerts-firing">-</div>
+                            <small class="text-muted">活跃告警</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0 text-warning" id="dash-mtta">-</div>
+                            <small class="text-muted">MTTA(分)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0 text-info" id="dash-mttr">-</div>
+                            <small class="text-muted">MTTR(分)</small>
+                        </div>
+                    </div>
+                    <div class="col-md-2 col-4 mb-2">
+                        <div class="text-center p-2 rounded bg-light">
+                            <div class="h4 mb-0" id="dash-sla">-</div>
+                            <small class="text-muted">SLA(%)</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-md-8">
+                        <div id="dash-trend-chart" style="height:250px;"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="mb-2"><i class="fas fa-project-diagram mr-1"></i>告警聚合组</h6>
+                        <div id="dash-groups-container">
+                            <p class="text-muted small">加载中...</p>
+                        </div>
+                        <hr>
+                        <h6 class="mb-2"><i class="fas fa-link mr-1"></i>关联分析</h6>
+                        <div id="dash-correlation-container">
+                            <p class="text-muted small">加载中...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-heartbeat text-danger mr-1"></i>健康评分排行</span>
+                <button class="btn btn-outline-danger btn-xs" onclick="loadHealthRanking()"><i class="fas fa-sync-alt"></i></button>
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-hover" id="health-ranking-table">
+                    <thead><tr><th>#</th><th>服务器</th><th>评分</th><th>等级</th><th>CPU</th><th>内存</th><th>磁盘</th></tr></thead>
+                    <tbody id="health-rank-body"><tr><td colspan="7" class="text-center text-muted">加载中...</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-project-diagram text-info mr-1"></i>服务拓扑</span>
+                <button class="btn btn-outline-info btn-xs" onclick="loadTopologyGraph()"><i class="fas fa-eye"></i></button>
+            </div>
+            <div class="card-body">
+                <div id="topology-mini" style="height:200px;position:relative;">
+                    <canvas id="topology-canvas"></canvas>
+                </div>
+                <small class="text-muted">点击查看完整依赖图与故障影响分析</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="dashboard-card">
+            <div class="card-header-custom">
+                <span><i class="fas fa-save mr-1"></i>我的仪表盘</span>
+                <button class="btn btn-outline-primary btn-xs" onclick="saveCurrentDashboard()"><i class="fas fa-plus"></i> 保存</button>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled mb-0" id="saved-dash-list">
+                    <li class="py-1 border-bottom"><a href="#" class="small" onclick="loadSavedDash(0)">加载中...</a></li>
+                </ul>
+                <hr>
+                <div class="btn-group btn-group-sm w-100">
+                    <button class="btn btn-outline-secondary" onclick="triggerHealthScan()"><i class="fas fa-stethoscope"></i> 巡检</button>
+                    <button class="btn btn-outline-secondary" onclick="showAgentPanel()"><i class="fas fa-robot"></i> Agent</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+<div class="modal fade" id="aiModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white"><i class="fas fa-robot mr-2"></i>AI 运维专家分析</h5>
+                <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="small text-muted">选择分析模型：</label>
+                    <select id="diagModelSelect" class="form-control form-control-sm">
+                        {% for m in ai_models %}
+                        <option value="{{ m.id }}">{{ m.name }} ({{ m.model_name }})</option>
+                        {% empty %}
+                        <option value="">未配置模型 (使用默认)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <hr>
+
+                <div id="aiLoading" class="text-center py-4" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-3 text-muted">正在读取监控指标并进行深度分析...</p>
+                </div>
+
+                <div id="aiContent" class="markdown-body" style="display: none; max-height: 400px; overflow-y: auto;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary btn-sm" onclick="startDiagnose()">开始分析</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const serverId = "{{ current_server_id|default:'' }}";
+
+    // --- AI 诊断逻辑 ---
+    function openDiagnoseModal() {
+        $('#aiModal').modal('show');
+        $('#aiContent').hide();
+    }
+
+    function startDiagnose() {
+        if (!serverId) return;
+        const modelId = document.getElementById('diagModelSelect').value;
+
+        $('#aiLoading').show();
+        $('#aiContent').hide();
+
+        $.ajax({
+            url: '/ai/diagnose/' + serverId + '/',
+            type: 'POST',
+            data: { 'model_id': modelId },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(res) {
+                $('#aiLoading').hide();
+                if (res.status) {
+                    $('#aiContent').html(marked.parse(res.analysis)).show();
+                } else {
+                    $('#aiContent').html('<div class="alert alert-danger">分析失败: ' + res.msg + '</div>').show();
+                }
+            },
+            error: function() {
+                $('#aiLoading').hide();
+                $('#aiContent').html('<div class="alert alert-danger">网络请求失败，请检查网络或 Key 配置</div>').show();
+            }
+        });
+    }
+
+    // --- ECharts 图表初始化 ---
+    document.addEventListener("DOMContentLoaded", function() {
+        // [关键] 如果没有安装 Agent，后端不会传数据，直接 return 避免报错
+        const hasAgent = "{{ sys_info.has_agent|yesno:'true,false' }}";
+        if (hasAgent === 'false') {
+            console.log("No Agent installed, skipping chart initialization.");
+            return;
+        }
+
+        // 数据源 (由 Django 模板注入)
+        const dates = {{ trend_dates|safe }};
+        const cpuData = {{ trend_cpu|default:"[]" }};
+        const memData = {{ trend_mem|default:"[]" }};
+        const netIn = {{ trend_net_in|default:"[]" }};
+        const netOut = {{ trend_net_out|default:"[]" }};
+        const diskData = {{ trend_disk|default:"[]" }};
+
+        // 新增：磁盘 IO 数据
+        const diskRead = {{ trend_disk_read|default:"[]" }};
+        const diskWrite = {{ trend_disk_write|default:"[]" }};
+
+        // 1. 顶部迷你图 Sparklines
+        initSparkLine('spark-cpu', '#ff4d4f', cpuData);
+        initSparkLine('spark-mem', '#1890ff', memData);
+        initSparkLine('spark-health', '#52c41a', [100]); // 示例数据
+
+        // 2. 资源趋势图
+        var chartTrend = echarts.init(document.getElementById('chart-trend'));
+        chartTrend.setOption({
+            tooltip: { trigger: 'axis', formatter: '{b}<br>{a0}: {c0}%<br>{a1}: {c1}%' },
+            legend: { data: ['CPU', 'Memory'], bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: dates },
+            yAxis: { type: 'value', max: 100, splitLine: { lineStyle: { type: 'dashed', color: '#eee' } } },
+            series: [
+                { name: 'CPU', type: 'line', smooth: true, itemStyle: { color: '#ff4d4f' }, areaStyle: { opacity: 0.1 }, data: cpuData },
+                { name: 'Memory', type: 'line', smooth: true, itemStyle: { color: '#1890ff' }, areaStyle: { opacity: 0.1 }, data: memData }
+            ]
+        });
+
+        // 3. 网络流量图
+        var chartNet = echarts.init(document.getElementById('chart-network'));
+        chartNet.setOption({
+            tooltip: { trigger: 'axis', formatter: '{b}<br>In: {c0} KB/s<br>Out: {c1} KB/s' },
+            legend: { data: ['Inbound', 'Outbound'], bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: dates },
+            yAxis: { type: 'value', name: 'KB/s', splitLine: { lineStyle: { type: 'dashed', color: '#eee' } } },
+            series: [
+                { name: 'Inbound', type: 'line', smooth: true, itemStyle: { color: '#52c41a' }, areaStyle: { opacity: 0.1 }, data: netIn },
+                { name: 'Outbound', type: 'line', smooth: true, itemStyle: { color: '#faad14' }, areaStyle: { opacity: 0.1 }, data: netOut }
+            ]
+        });
+
+        // 4. 新增：磁盘读写图
+        var chartDiskIO = echarts.init(document.getElementById('chart-disk-io'));
+        chartDiskIO.setOption({
+            tooltip: { trigger: 'axis', formatter: '{b}<br>Read: {c0} KB/s<br>Write: {c1} KB/s' },
+            legend: { data: ['Read', 'Write'], bottom: 0 },
+            grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: dates },
+            yAxis: { type: 'value', name: 'KB/s', splitLine: { lineStyle: { type: 'dashed', color: '#eee' } } },
+            series: [
+                { name: 'Read', type: 'line', smooth: true, itemStyle: { color: '#13c2c2' }, areaStyle: { opacity: 0.1 }, data: diskRead },
+                { name: 'Write', type: 'line', smooth: true, itemStyle: { color: '#722ed1' }, areaStyle: { opacity: 0.1 }, data: diskWrite }
+            ]
+        });
+
+        // 5. 负载仪表
+        var chartLoad = echarts.init(document.getElementById('chart-load'));
+        chartLoad.setOption({
+            series: [{
+                type: 'gauge',
+                max: {{ sys_info.cores }} > 0 ? {{ sys_info.cores }} : 4, // 动态最大值
+                progress: { show: true, width: 8 },
+                axisLine: { lineStyle: { width: 8 } },
+                axisTick: { show: false },
+                splitLine: { length: 5, lineStyle: { width: 1 } },
+                axisLabel: { distance: 10, fontSize: 10, color: '#999' },
+                detail: { valueAnimation: true, fontSize: 18, offsetCenter: [0, '70%'], formatter: '{value}' },
+                data: [{ value: {{ sys_info.load|default:0 }}, name: 'Load' }]
+            }]
+        });
+
+        // 6. 磁盘仪表
+        var chartDisk = echarts.init(document.getElementById('chart-disk'));
+        var lastDisk = diskData.length > 0 ? diskData[diskData.length - 1] : 0;
+        chartDisk.setOption({
+            series: [{
+                type: 'gauge',
+                progress: { show: true, width: 8 },
+                axisLine: { lineStyle: { width: 8 } },
+                pointer: { show: false },
+                axisTick: { show: false },
+                splitLine: { show: false },
+                axisLabel: { show: false },
+                detail: {
+                    valueAnimation: true, fontSize: 20, offsetCenter: [0, '0%'],
+                    formatter: '{value}%',
+                    color: lastDisk > 90 ? '#ff4d4f' : '#333'
+                },
+                data: [{ value: lastDisk }],
+                itemStyle: { color: lastDisk > 90 ? '#ff4d4f' : '#1890ff' }
+            }]
+        });
+
+        // 响应式调整
+        window.addEventListener('resize', function() {
+            chartTrend.resize();
+            chartNet.resize();
+            chartLoad.resize();
+            chartDisk.resize();
+            chartDiskIO.resize();
+        });
+    });
+
+    // 迷你图辅助函数
+    function initSparkLine(id, color, data) {
+        if (!data || data.length === 0) data = [0];
+        echarts.init(document.getElementById(id)).setOption({
+            grid: { top: 0, bottom: 0, left: 0, right: 0 },
+            xAxis: { show: false, data: data },
+            yAxis: { show: false },
+            series: [{ type: 'line', smooth: true, showSymbol: false, lineStyle: { width: 2, color: color }, areaStyle: { opacity: 0.2, color: color }, data: data }]
+        });
+    }
+</script>
+
+<!-- ==================== 告警面板 (Phase 1 新增) ==================== -->
+{% load humanize %}
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-bell text-danger"></i> 活跃告警
+                    <span id="alert-count" class="badge badge-danger ml-2">0</span>
+                </h5>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="refreshAlerts()">
+                        <i class="fas fa-sync-alt"></i> 刷新
+                    </button>
+                    <a href="/admin/monitoring/alertevent/" class="btn btn-sm btn-outline-secondary ml-1" target="_blank">
+                        管理全部
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="alert-list-container">
+                    <div class="text-center text-muted py-4" id="alert-loading">加载中...</div>
+                    <table class="table table-hover mb-0" id="alert-table" style="display:none;">
+                        <thead class="thead-light">
+                            <tr>
+                                <th width="60">级别</th>
+                                <th>规则</th>
+                                <th>服务器</th>
+                                <th>消息</th>
+                                <th width="80">状态</th>
+                                <th width="120">触发时间</th>
+                                <th width="140">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alert-tbody"></tbody>
+                    </table>
+                    <div id="alert-empty" class="text-center text-muted py-4" style="display:none;">
+                        <i class="fas fa-check-circle text-success fa-2x"></i>
+                        <p class="mt-2 mb-0">暂无活跃告警</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> 快捷预置规则</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    <button class="btn btn-sm btn-outline-danger" onclick="createPresetRule('cpu_high')">
+                        CPU > 90% 告警
+                    </button>
+                    <button class="btn btn-sm btn-outline-warning" onclick="createPresetRule('mem_high')">
+                        内存 > 85% 告警
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="createPresetRule('disk_high')">
+                        磁盘 > 90% 告警
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="createPresetRule('agent_lost')">
+                        Agent 掉线检测
+                    </button>
+                    <a href="/admin/monitoring/alertrule/add/" class="btn btn-sm btn-primary" target="_blank">
+                        <i class="fas fa-plus"></i> 自定义规则
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const ALERT_API = '/api/monitoring/alerts/';
+
+function refreshAlerts() {
+    fetch(ALERT_API + '?status=firing&size=20')
+        .then(r => r.json())
+        .then(resp => {
+            const items = resp.data.items || [];
+            document.getElementById('alert-count').textContent = items.length;
+            
+            const tbody = document.getElementById('alert-tbody');
+            const table = document.getElementById('alert-table');
+            const empty = document.getElementById('alert-empty');
+            const loading = document.getElementById('alert-loading');
+
+            loading.style.display = 'none';
+            
+            if (items.length === 0) {
+                table.style.display = 'none';
+                empty.style.display = 'block';
+                tbody.innerHTML = '';
+                return;
+            }
+
+            empty.style.display = 'none';
+            table.style.display = 'table';
+
+            const sevColors = {'P0':'danger','P1':'warning','P2':'info','P3':'secondary'};
+            const statColors = {'firing':'danger','acknowledged':'warning','resolved':'success'};
+            const statLabels = {'firing':'触发中','acknowledged':'已确认','resolved':'已恢复'};
+
+            tbody.innerHTML = items.map(a => `
+                <tr>
+                    <td><span class="badge badge-${sevColors[a.severity]||'secondary'}">${a.severity}</span></td>
+                    <td>${esc(a.rule_name)}</td>
+                    <td>${esc(a.server_name)||'-'}</td>
+                    <td title="${esc(a.message)}">${esc(a.message).substring(0,60)}${a.message.length>60?'...':''}</td>
+                    <td><span class="badge badge-${statColors[a.status]||'secondary'}">${statLabels[a.status]}</span></td>
+                    <td>${timeAgo(a.fired_at)}</td>
+                    <td>
+                        ${a.status==='firing'?`
+                            <button class="btn btn-xs btn-outline-success" onclick="ackAlert(${a.id})">确认</button>
+                            <button class="btn btn-xs btn-outline-secondary" onclick="resolveAlert(${a.id})">恢复</button>
+                        `:''}
+                    </td>
+                </tr>
+            `).join('');
+        })
+        .catch(err => console.error('加载告警失败:', err));
+}
+
+function ackAlert(id) {
+    fetch(`/api/monitoring/alerts/${id}/ack/`, {method:'POST'})
+        .then(() => refreshAlerts());
+}
+
+function resolveAlert(id) {
+    fetch(`/api/monitoring/alerts/${id}/resolve/`, {method:'POST'})
+        .then(() => refreshAlerts());
+}
+
+function createPresetRule(type) {
+    const presets = {
+        cpu_high: {name:'CPU使用率过高',metric_name:'cpu_usage',rule_type:'threshold',
+                  condition_config:{operator:'gt',value:90},severity:'P1'},
+        mem_high: {name:'内存使用率过高',metric_name:'mem_usage',rule_type:'threshold',
+                  condition_config:{operator:'gt',value:85},severity:'P1'},
+        disk_high: {name:'磁盘空间不足',metric_name:'disk_usage',rule_type:'threshold',
+                   condition_config:{operator:'gt',value:90},severity:'P2'},
+        agent_lost: {name:'Agent掉线检测',metric_name:'cpu_usage',rule_type:'absence',
+                   condition_config:{absent_minutes:5},severity:'P1'}
+    };
+    const p = presets[type];
+    if (!p) return;
+    
+    fetch('/api/monitoring/rules/create/', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(p)
+    }).then(r=>r.json()).then(resp=>{
+        if(resp.code===0){
+            alert(`规则 "${p.name}" 创建成功! ID=${resp.data.id}`);
+            refreshAlerts();
+        } else {
+            alert('创建失败: '+resp.msg);
+        }
+    });
+}
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML;}
+function timeAgo(isoStr){
+    const diff=(Date.now()-new Date(isoStr).getTime())/1000;
+    if(diff<60)return Math.floor(diff)+'秒前';
+    if(diff<3600)return Math.floor(diff/60)+'分钟前';
+    if(diff<86400)return Math.floor(diff/3600)+'小时前';
+    return Math.floor(diff/86400)+'天前';
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+    refreshAlerts();
+    setInterval(refreshAlerts, 30000);
+    loadAnomalyTimeline();
+    connectWS();
+    loadTopN('cpu_usage');
+    changeTimeRange('24h');
+    loadDashboardOverview();
+});
+
+function loadAnomalyTimeline() {
+    const sid = serverId || '';
+    fetch('/api/monitoring/anomaly/timeline/?days=7' + (sid ? '&server_id=' + sid : ''))
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0) return;
+            const data = resp.data;
+            renderTimeline(data.timeline || []);
+            renderStats(data.summary || {});
+        })
+        .catch(err => console.error('加载异常时间线失败:', err));
+}
+
+function renderTimeline(items) {
+    const container = document.getElementById('anomaly-timeline-container');
+    if (!items.length) {
+        container.innerHTML = '<p class="text-muted text-center py-4">暂无异常记录</p>';
+        return;
+    }
+    const sevColors = { high: 'danger', medium: 'warning', low: 'info' };
+    const sevLabels = { high: '高度', medium: '中度', low: '轻度' };
+    container.innerHTML = items.map(item => `
+        <div class="media mb-3 p-2 rounded hover-bg" style="cursor:pointer;border-left:3px solid ${item.severity==='high'?'#ff4d4f':item.severity==='medium'?'#faad14':'#52c41a'}"
+             onclick="showAnomalyDetail(${item.id})">
+            <div class="mr-3">
+                <span class="badge badge-${sevColors[item.severity]||'secondary'}">${sevLabels[item.severity]}</span>
+            </div>
+            <div class="media-body">
+                <div class="d-flex justify-content-between">
+                    <strong>${esc(item.server)} - ${esc(item.metric)}</strong>
+                    <small class="text-muted">${timeAgo(item.time)}</small>
+                </div>
+                <div class="text-muted small mt-1">
+                    分数: ${item.score} | ${item.method}
+                    ${item.has_ai ? '<i class="fas fa-robot text-primary ml-1" title="已AI分析"></i>' : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function renderStats(summary) {
+    const container = document.getElementById('anomaly-stats-container');
+    if (summary.total === 0) {
+        container.innerHTML = '<p class="text-muted text-center py-4">暂无数据</p>';
+        return;
+    }
+    container.innerHTML = `
+        <div class="text-center mb-3">
+            <h3 style="color:#ff4d4f;font-size:36px;">${summary.total}</h3>
+            <small class="text-muted">总异常数(7天)</small>
+        </div>
+        <div class="row text-center">
+            <div class="col-4"><div class="h5 mb-0 text-danger">${summary.by_severity.high||0}</div><small class="text-muted">高</small></div>
+            <div class="col-4"><div class="h5 mb-0 text-warning">${summary.by_severity.medium||0}</div><small class="text-muted">中</small></div>
+            <div class="col-4"><div class="h5 mb-0 text-info">${summary.by_severity.low||0}</div><small class="text-muted">低</small></div>
+        </div>
+        <hr>
+        <small class="text-muted">按指标:</small>
+        ${(summary.by_metric ? Object.entries(summary.by_metric) : []).map(([k,v]) =>
+            `<div class="d-flex justify-content-between small"><span>${k}</span><span class="font-weight-bold">${v}</span></div>`
+        ).join('')}
+    `;
+}
+
+function showAnomalyDetail(id) {
+    fetch('/api/monitoring/anomaly/' + id + '/detail/')
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0) { alert('加载失败'); return; }
+            const d = resp.data;
+            const a = d.anomaly;
+            const ai = d.ai_diagnosis;
+            document.getElementById('anomalyDetailBody').innerHTML = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>异常信息</h6>
+                        <table class="table table-sm table-borderless">
+                            <tr><td class="w-40 text-muted">服务器:</td><td><b>${a.server}</b></td></tr>
+                            <tr><td class="text-muted">指标:</td><td>${a.metric}</td></tr>
+                            <tr><td class="text-muted">检测时间:</td><td>${a.detected_at}</td></tr>
+                            <tr><td class="text-muted">程度:</td><td><span class="badge badge-${a.severity==='high'?'danger':a.severity==='medium'?'warning':'info'}">${a.severity}</span></td></tr>
+                            <tr><td class="text-muted">异常分数:</td><td><b>${a.score}</b></td></tr>
+                            <tr><td class="text-muted">检测方法:</td><td>${a.method}</td></tr>
+                            <tr><td class="text-muted">当前值:</td><td>${a.current_value}</td></tr>
+                            <tr><td class="text-muted">基线值:</td><td>${a.baseline||'-'}</td></tr>
+                            <tr><td class="text-muted">偏差%:</td><td>${a.deviation_pct!=null?a.deviation_pct+'%':'-'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        ${ai ? `
+                            <h6><i class="fas fa-robot text-primary"></i> AI 诊断</h6>
+                            <div class="alert alert-info mb-2">
+                                <strong>置信度:</strong> ${ai.confidence ? (ai.confidence*100).toFixed(1)+'%' : '-'}
+                                ${ai.analyzed_at ? `<br><small class="text-muted">${ai.analyzed_at}</small>` : ''}
+                            </div>
+                            <pre class="bg-light p-2 rounded small" style="max-height:150px;overflow:auto;">${esc(ai.content)}</pre>
+                        ` : '<p class="text-muted mt-4">暂无AI诊断结果</p>'}
+                    </div>
+                </div>
+            `;
+            $('#anomalyDetailModal').modal('show');
+        });
+}
+
+function applyMarkPoints(chartInstance, metricName) {
+    if (!serverId) return;
+    fetch(`/api/monitoring/anomaly/markpoints/?server_id=${serverId}&metric_name=${metricName}&days=1`)
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0 || !resp.data.markPoints.length) return;
+            chartInstance.setOption({
+                series: [{ markPoint: { data: resp.data.markPoints } }]
+            });
+        })
+        .catch(() => {});
+}
+
+// ==================== Phase 3: 实时推送 / TopN / 时间范围 ====================
+
+let ws = null;
+let currentRange = '24h';
+
+function connectWS() {
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + window.location.host + '/ws/monitoring/');
+
+    ws.onopen = function() {
+        console.log('[WS] Connected');
+        const el = document.getElementById('ws-status');
+        if (el) { el.className = 'badge badge-success'; el.textContent = '实时'; }
+    };
+
+    ws.onmessage = function(evt) {
+        try {
+            const msg = JSON.parse(evt.data);
+            handleWSMessage(msg);
+        } catch(e) {}
+    };
+
+    ws.onclose = function() {
+        console.log('[WS] Disconnected, reconnecting in 5s...');
+        const el = document.getElementById('ws-status');
+        if (el) { el.className = 'badge badge-warning'; el.textContent = '重连中...'; }
+        setTimeout(connectWS, 5000);
+    };
+
+    ws.onerror = function() {
+        const el = document.getElementById('ws-status');
+        if (el) { el.className = 'badge badge-danger'; el.textContent = '错误'; }
+    };
+}
+
+function handleWSMessage(msg) {
+    switch(msg.event_type) {
+        case 'metrics_update':
+            if (msg.cluster_avg) updateMetricsCards(msg.cluster_avg);
+            break;
+        case 'alert_fired':
+            showAlertToast(msg);
+            refreshAlerts();
+            break;
+        case 'connected':
+            break;
+    }
+}
+
+function updateMetricsCards(avg) {
+    if (!avg) return;
+    animateValue('cpu-value', avg.cpu, '%');
+    animateValue('mem-value', avg.mem, '%');
+    animateValue('disk-value', avg.disk, '%');
+}
+
+function animateValue(elementId, newValue, suffix) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.textContent = newValue + suffix;
+    el.style.transition = 'color 0.3s';
+    el.style.color = '#1890ff';
+    setTimeout(() => { el.style.color = ''; }, 300);
+}
+
+function showAlertToast(data) {
+    const sevColors = {'P0':'#ff4d4f','P1':'#faad14','P2':'#1890ff','P3':'#52c41a'};
+    const color = sevColors[data.severity] || '#faad14';
+    const toastId = 'toast-' + Date.now();
+    const html = `
+        <div id="${toastId}" class="alert alert-dismissible py-2 px-3" style="position:fixed;top:70px;right:20px;z-index:9999;min-width:320px;border-left:4px solid ${color};background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-bell mr-2" style="color:${color}"></i>
+                <div>
+                    <strong>[${data.severity}] ${esc(data.rule_name)}</strong>
+                    <div class="small text-muted">${esc(data.server_hostname)} - ${data.metric_name}: ${data.current_value}</div>
+                </div>
+            </div>
+            <button type="button" class="close" onclick="document.getElementById('${toastId}').remove()"><span>&times;</span></button>
+        </div>`;
+    document.body.insertAdjacentHTML('beforeend', html);
+    setTimeout(() => { const t = document.getElementById(toastId); if(t) t.remove(); }, 8000);
+}
+
+// --- TopN ---
+let topnMetric = 'cpu_usage';
+
+function loadTopN(metric, btnEl) {
+    topnMetric = metric || 'cpu_usage';
+    if (btnEl) {
+        $(btnEl).addClass('active').siblings().removeClass('active');
+    }
+    fetch('/api/monitoring/topn/?metric=' + topnMetric + '&limit=10')
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0) return;
+            renderTopN(resp.data.items);
+        })
+        .catch(() => {});
+}
+
+function renderTopN(items) {
+    const tbody = document.getElementById('topn-tbody');
+    if (!items.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">暂无数据</td></tr>'; return; }
+    tbody.innerHTML = items.map(item => {
+        const pct = Math.min(100, item.value);
+        const color = pct > 90 ? '#ff4d4f' : pct > 70 ? '#faad14' : '#52c41a';
+        return `<tr>
+            <td><span class="badge ${item.rank<=3?'badge-danger':'badge-secondary'}">${item.rank}</span></td>
+            <td>${esc(item.hostname)}</td>
+            <td><b>${item.value}${topnMetric.includes('usage')||topnMetric==='load_1min'?'%':''}</b></td>
+            <td><div class="progress" style="height:8px;"><div class="progress-bar" style="width:${pct}%;background:${color}"></div></div></td>
+        </tr>`;
+    }).join('');
+}
+
+// --- Time Range ---
+const rangeLabels = {'1h':'1小时','6h':'6小时','24h':'24小时','7d':'7天','30d':'30天'};
+
+function changeTimeRange(range, btnEl) {
+    currentRange = range;
+    if (btnEl) {
+        $(btnEl).addClass('active').siblings().removeClass('active');
+    }
+    document.getElementById('current-range-label').textContent = rangeLabels[range] || range;
+
+    let url = '/api/monitoring/trend/aggregated/?range=' + range;
+    if (serverId) url += '&server_id=' + serverId;
+
+    fetch(url)
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0) return;
+            const d = resp.data;
+            document.getElementById('range-data-count').textContent = d.times.length;
+            document.getElementById('range-avg').textContent = d.avg;
+            document.getElementById('range-max').textContent = d.max;
+            document.getElementById('range-min').textContent = d.min;
+        })
+        .catch(() => {});
+}
+
+// ==================== Phase 4: 运维统计大屏 ====================
+let dashTrendChart = null;
+
+function loadDashboardOverview() {
+    fetch('/api/monitoring/dashboard/overview/')
+        .then(r => r.json())
+        .then(resp => {
+            if (resp.code !== 0) return;
+            const d = resp.data;
+
+            $('#dash-servers-total').text(d.servers.total);
+            $('#dash-servers-up').text(d.servers.up + ' / ' + d.servers.down + '↓');
+            $('#dash-alerts-firing').text(d.alerts.firing);
+            $('#dash-mtta').text(d.alerts.mtta_minutes || '-');
+            $('#dash-mttr').text(d.alerts.mttr_minutes || '-');
+            const slaEl = document.getElementById('dash-sla');
+            slaEl.textContent = (d.alerts.sla_24h || 0).toFixed(1) + '%';
+            slaEl.className = 'h4 mb-0 ' + (d.alerts.sla_24h >= 99.5 ? 'text-success' : d.alerts.sla_24h >= 99 ? 'text-warning' : 'text-danger');
+
+            renderDashTrend(d.trend);
+
+            loadAlertGroups();
+            loadCorrelationData();
+        })
+        .catch(err => console.error('[Dashboard] 加载失败:', err));
+}
+
+function renderDashTrend(trend) {
+    const container = document.getElementById('dash-trend-chart');
+    if (!container) return;
+    if (!dashTrendChart) {
+        dashTrendChart = echarts.init(container);
+    }
+    const days = ['6天前','5天前','4天前','3天前','2天前','昨天','今天'];
+    dashTrendChart.setOption({
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['告警数', '异常数'], bottom: 0 },
+        grid: { top: 20, right: 20, bottom: 40, left: 50 },
+        xAxis: { type: 'category', data: days, axisLabel: { fontSize: 11 } },
+        yAxis: { type: 'value', name: '数量', minInterval: 1 },
+        series: [
+            { name: '告警数', type: 'bar', data: trend.alerts_7d, itemStyle: { color: '#ff7875' } },
+            { name: '异常数', type: 'line', data: trend.anomalies_7d, smooth: true, itemStyle: { color: '#faad14' }, areaStyle: { opacity: 0.15 } },
+        ]
+    });
+}
+
+function loadAlertGroups() {
+    fetch('/api/monitoring/correlation/groups/')
+        .then(r => r.json())
+        .then(resp => {
+            const el = document.getElementById('dash-groups-container');
+            if (resp.code !== 0 || !resp.data.clusters.length) {
+                el.innerHTML = '<p class="text-muted small">暂无活跃聚合组</p>';
+                return;
+            }
+            el.innerHTML = resp.data.clusters.slice(0, 8).map(c => `
+                <div class="d-flex justify-content-between align-items-center small py-1 border-bottom">
+                    <span class="text-truncate" style="max-width:180px;" title="${esc(c.root_rule_name)}">
+                        <span class="badge badge-${c.cluster_size>3?'danger':'secondary'}">${c.cluster_size}</span>
+                        ${esc(c.root_rule_name)}
+                    </span>
+                    <span class="text-muted">${c.confidence}</span>
+                </div>
+            `).join('');
+        })
+        .catch(() => {});
+}
+
+function loadCorrelationData() {
+    const el = document.getElementById('dash-correlation-container');
+    el.innerHTML = '<p class="text-muted small"><i class="fas fa-spinner fa-spin"></i> 分析中...</p>';
+}
+
+// ==================== Phase 5: 健康评分 / 拓扑 / 仪表盘 / Agent ====================
+
+function loadHealthRanking() {
+    fetch('/api/monitoring/health/scores/')
+        .then(r => r.json())
+        .then(d => {
+            const tbody = document.getElementById('health-rank-body');
+            if (!d.data || !d.data.ranking) { tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">无数据</td></tr>'; return; }
+            const gradeColors = {'A':'#52c41a','B':'#1890ff','C':'#faad14','D':'#ff4d4f','F':'#cf1322'};
+            tbody.innerHTML = d.data.ranking.map((r, i) => `<tr>
+                <td>${r.rank}</td><td>${r.hostname}</td><td><b>${r.score}</b></td>
+                <td><span style="background:${gradeColors[r.grade]||'#999'};color:#fff;padding:1px 8px;border-radius:3px;font-size:11px;">${r.grade}</span></td>
+                <td>-</td><td>-</td><td>-</td>
+            </tr>`).join('');
+        });
+}
+loadHealthRanking();
+
+let topologyChartInstance = null;
+function loadTopologyGraph() {
+    fetch('/api/monitoring/topology/graph/')
+        .then(r => r.json())
+        .then(d => {
+            if (!d.data) return;
+            const canvas = document.getElementById('topology-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.parentElement.offsetWidth;
+            canvas.height = 200;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const nodes = d.data.nodes || [];
+            const links = d.data.links || [];
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const radius = Math.min(cx, cy) - 30;
+            nodes.forEach((n, i) => {
+                const angle = (2 * Math.PI * i) / Math.max(nodes.length, 1);
+                n._x = cx + radius * Math.cos(angle);
+                n._y = cy + radius * Math.sin(angle);
+                ctx.beginPath();
+                ctx.arc(n._x, n._y, 12, 0, 2 * Math.PI);
+                ctx.fillStyle = n.health === 'healthy' ? '#52c41a' : n.health === 'warning' ? '#faad14' : '#ff4d4f';
+                ctx.fill();
+                ctx.fillStyle = '#fff';
+                ctx.font = '9px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(n.name.substring(0,6), n._x, n._y + 28);
+            });
+            links.forEach(l => {
+                const s = nodes[l.source], t = nodes[l.target];
+                if (s && t) {
+                    ctx.beginPath();
+                    ctx.moveTo(s._x, s._y);
+                    ctx.lineTo(t._x, t._y);
+                    ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.stroke();
+                }
+            });
+        });
+}
+setTimeout(loadTopologyGraph, 1000);
+
+function loadSavedDashboards() {
+    fetch('/api/monitoring/dashboards/saved/?include_public=1')
+        .then(r => r.json())
+        .then(d => {
+            const ul = document.getElementById('saved-dash-list');
+            if (!d.data || !d.data.items) return;
+            ul.innerHTML = (d.data.items.length ? d.data.items : [{id:0,name:'暂无保存的仪表盘'}]).map(item =>
+                `<li class="py-1 border-bottom"><a href="#" class="small" onclick="loadSavedDash(${item.id});return false;">${item.name}</a></li>`
+            ).join('');
+        });
+}
+loadSavedDashboards();
+
+function saveCurrentDashboard() {
+    const name = prompt('请输入仪表盘名称:', `我的面板_${new Date().toLocaleDateString()}`);
+    if (!name) return;
+    fetch('/api/monitoring/dashboards/save/', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({name:name, config:{timeRange:currentRange||'24h'}})
+    }).then(r=>r.json()).then(d=>{
+        alert(d.code===0?'保存成功! ID:'+d.data.id:'保存失败: '+d.msg);
+        loadSavedDashboards();
+    });
+}
+
+function loadSavedDash(id) {
+    if (!id) return;
+    fetch(`/api/monitoring/dashboards/${id}/load/`)
+        .then(r=>r.json()).then(d=>{
+            if (d.code!==0){alert('加载失败');return;}
+            alert(`已加载: ${d.data.name}`);
+            if (d.data.config && d.data.config.timeRange) {
+                currentRange = d.data.config.timeRange;
+                refreshAllCharts();
+            }
+        });
+}
+
+function triggerHealthScan() {
+    if (!confirm('确定执行健康巡检?')) return;
+    fetch('/api/monitoring/health/scan/', {method:'POST'})
+        .then(r=>r.json()).then(d=>{
+            alert(d.code===0?`巡检完成! 扫描了 ${d.data.scanned} 台服务器`:'失败: '+d.msg);
+            loadHealthRanking();
+        });
+}
+
+function showAgentPanel() {
+    fetch('/api/monitoring/agent/tokens/')
+        .then(r=>r.json())
+        .then(d=>{
+            let html = '<h5>Agent Token 列表</h5>';
+            if (d.data && d.data.items) {
+                d.data.items.forEach(t => {
+                    html += `<div class="border rounded p-2 mb-2">
+                        <b>${t.name}</b> → ${t.server_hostname||'未绑定'}<br>
+                        <small>状态: ${t.is_active?'在线':'离线'} | 上报: ${t.last_seen_at||'从未'}</small>
+                    </div>`;
+                });
+            } else { html += '<p>暂无Agent</p>'; }
+            html += '<hr><button class="btn btn-sm btn-primary" onclick="createAgentToken()">+ 创建 Token</button>';
+            showModal('Agent 管理', html);
+        });
+}
+
+function createAgentToken() {
+    const name = prompt('Agent 名称:');
+    if (!name) return;
+    fetch('/api/monitoring/agent/token/create/', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:name})
+    }).then(r=>r.json()).then(d=>{
+        if (d.code===0){
+            alert(`Token 已创建!\n\n${d.data.token}\n\n请妥善保管!`);
+            showAgentPanel();
+        } else { alert('创建失败: '+d.msg); }
+    });
+}
+</script>
+<!-- ==================== 告警面板结束 ==================== -->
+
+{% endblock %}

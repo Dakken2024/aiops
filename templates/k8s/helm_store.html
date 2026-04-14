@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline card-outline-tabs">
+            <div class="card-header p-0 border-bottom-0">
+                <ul class="nav nav-tabs" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="pill" href="#tab-market" onclick="searchCharts()">
+                            <i class="fas fa-shopping-cart mr-1"></i> 应用市场
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="pill" href="#tab-releases" onclick="loadReleases()">
+                            <i class="fas fa-box-open mr-1"></i> 已装应用
+                        </a>
+                    </li>
+                    {% if request.user.is_superuser %}
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="pill" href="#tab-repos" onclick="loadRepos()">
+                            <i class="fas fa-server mr-1"></i> 仓库管理
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+            <div class="card-body">
+                <div class="tab-content">
+
+                    <div class="tab-pane fade show active" id="tab-market">
+                        <div class="input-group mb-3" style="width: 400px;">
+                            <input type="text" id="chartSearch" class="form-control" placeholder="搜索应用 (如 mysql)...">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" onclick="searchCharts()"><i class="fas fa-search"></i> 搜索</button>
+                            </div>
+                        </div>
+                        <div id="chartList" class="row"></div>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-releases">
+                        <div class="d-flex justify-content-between mb-2">
+                            <div class="form-inline">
+                                <label class="mr-2">集群:</label>
+                                <select class="form-control" id="releaseClusterSelect" onchange="loadReleases()">
+                                    {% for c in clusters %}
+                                    <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <button class="btn btn-sm btn-default" onclick="loadReleases()"><i class="fas fa-sync"></i> 刷新</button>
+                        </div>
+                        <table class="table table-hover text-nowrap table-striped">
+                            <thead><tr><th>Name</th><th>Namespace</th><th>Revision</th><th>Status</th><th>Chart</th><th>Action</th></tr></thead>
+                            <tbody id="releaseTableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="tab-pane fade" id="tab-repos">
+                        <div class="mb-3">
+                            <button class="btn btn-success btn-sm" onclick="$('#addRepoModal').modal('show')"><i class="fas fa-plus"></i> 添加仓库</button>
+                        </div>
+                        <table class="table table-bordered">
+                            <thead><tr><th>Name</th><th>URL</th><th>Action</th></tr></thead>
+                            <tbody id="repoTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="installModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">安装应用: <span id="installChartName" class="font-weight-bold"></span></h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group"><label>Release Name</label><input type="text" class="form-control" id="installReleaseName"></div>
+                        <div class="form-group"><label>Namespace</label><input type="text" class="form-control" id="installNamespace" value="default"></div>
+                        <div class="form-group">
+                            <label>目标集群</label>
+                            <select class="form-control" id="installCluster">
+                                {% for c in clusters %}
+                                <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-9">
+                        <label>配置参数 (values.yaml)</label>
+                        <div id="monaco-container" style="height: 500px; border: 1px solid #ccc;"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="confirmInstall()">确定部署</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addRepoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header"><h5 class="modal-title">添加仓库</h5></div>
+            <div class="modal-body">
+                <div class="form-group"><label>名称</label><input type="text" id="newRepoName" class="form-control"></div>
+                <div class="form-group"><label>URL</label><input type="text" id="newRepoUrl" class="form-control"></div>
+            </div>
+            <div class="modal-footer"><button class="btn btn-primary" onclick="submitAddRepo()">添加</button></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+<script>
+    // --- Monaco 初始化 ---
+    var editor;
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: "# Loading values...",
+            language: 'yaml',
+            theme: 'vs',
+            automaticLayout: true,
+            fontSize: 13
+        });
+    });
+
+    const csrftoken = "{{ csrf_token }}";
+
+    // --- Chart 市场 ---
+    $(document).ready(function() {
+        searchCharts();
+    });
+
+    function searchCharts() {
+        const kw = $('#chartSearch').val();
+        $('#chartList').html('<div class="col-12 text-center text-muted py-5"><i class="fas fa-spinner fa-spin"></i> Loading...</div>');
+
+        $.get("{% url 'k8s_helm_chart' %}", { action: 'search', keyword: kw }, function(res) {
+            let html = '';
+            if(res.status && res.data.length > 0) {
+                res.data.slice(0, 50).forEach(c => {
+                    html += `
+                    <div class="col-md-3 col-sm-6 mb-4">
+                        <div class="card h-100 shadow-sm border-0">
+                            <div class="card-body text-center">
+                                <div class="mb-3" style="font-size:40px; color:#333;"><i class="fas fa-box-open"></i></div>
+                                <h6 class="font-weight-bold text-truncate" title="${c.name}">${c.name}</h6>
+                                <p class="small text-muted mb-2 text-truncate" title="${c.description}">${c.description || '-'}</p>
+                                <span class="badge badge-light border mb-3">v${c.version}</span>
+                                <button class="btn btn-sm btn-primary btn-block" onclick="openInstall('${c.name}')">安装</button>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+            } else {
+                html = '<div class="col-12 text-center text-muted">未找到应用，请尝试添加仓库或检查 Helm 配置。</div>';
+            }
+            $('#chartList').html(html);
+        });
+    }
+
+    // --- 安装流程 ---
+    function openInstall(chartName) {
+        $('#installModal').modal('show');
+        $('#installChartName').text(chartName);
+        $('#installReleaseName').val(chartName.split('/')[1] || chartName);
+
+        if(editor) editor.setValue("# Loading default values...");
+        $.get("{% url 'k8s_helm_chart' %}", { action: 'values', chart: chartName }, function(res) {
+            if(res.status && editor) editor.setValue(res.values);
+            else if(editor) editor.setValue("# Error: " + res.msg);
+        });
+    }
+
+    function confirmInstall() {
+        if(!confirm("确定部署？")) return;
+        $.post("{% url 'k8s_helm_release' %}", {
+            action: 'install',
+            cluster_id: $('#installCluster').val(),
+            chart: $('#installChartName').text(),
+            name: $('#installReleaseName').val(),
+            namespace: $('#installNamespace').val(),
+            values: editor ? editor.getValue() : ''
+        }, function(res) {
+            alert(res.msg);
+            if(res.status) {
+                $('#installModal').modal('hide');
+                $('.nav-tabs a[href="#tab-releases"]').tab('show');
+                loadReleases();
+            }
+        });
+    }
+
+    // --- Repo 管理 ---
+    function loadRepos() {
+        $.get("{% url 'k8s_helm_repo' %}", function(res) {
+            let html = '';
+            if(res.status) {
+                res.data.forEach(r => {
+                    html += `<tr><td>${r.name}</td><td>${r.url}</td><td><button class="btn btn-xs btn-danger" onclick="deleteRepo('${r.name}')">删除</button></td></tr>`;
+                });
+            }
+            $('#repoTableBody').html(html || '<tr><td colspan="3" class="text-center">暂无仓库</td></tr>');
+        });
+    }
+
+    function submitAddRepo() {
+        $.post("{% url 'k8s_helm_repo' %}", {
+            action: 'add', name: $('#newRepoName').val(), url: $('#newRepoUrl').val()
+        }, function(res) {
+            alert(res.msg);
+            if(res.status) { $('#addRepoModal').modal('hide'); loadRepos(); }
+        });
+    }
+
+    function deleteRepo(name) {
+        if(confirm('确定删除?')) $.post("{% url 'k8s_helm_repo' %}", { action: 'delete', name: name }, function(res) {
+            if(res.status) loadRepos(); else alert(res.msg);
+        });
+    }
+
+    // --- Release 管理 ---
+    function loadReleases() {
+        $('#releaseTableBody').html('<tr><td colspan="6" class="text-center">Loading...</td></tr>');
+        $.get("{% url 'k8s_helm_release' %}", { cluster_id: $('#releaseClusterSelect').val() }, function(res) {
+            let html = '';
+            if(res.status && res.data) {
+                res.data.forEach(r => {
+                    html += `<tr><td class="font-weight-bold">${r.name}</td><td>${r.namespace}</td><td>${r.revision}</td>
+                             <td class="${r.status==='deployed'?'text-success':'text-warning'}">${r.status}</td><td>${r.chart}</td>
+                             <td><button class="btn btn-xs btn-danger" onclick="uninstallRelease('${r.name}', '${r.namespace}')">卸载</button></td></tr>`;
+                });
+            }
+            $('#releaseTableBody').html(html || '<tr><td colspan="6" class="text-center">暂无发布</td></tr>');
+        });
+    }
+
+    function uninstallRelease(name, ns) {
+        if(confirm(`卸载 ${name}?`)) $.post("{% url 'k8s_helm_release' %}", {
+            action: 'uninstall', cluster_id: $('#releaseClusterSelect').val(), name: name, namespace: ns
+        }, function(res) {
+            alert(res.msg); if(res.status) loadReleases();
+        });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-hdd text-primary mr-2"></i>存储卷声明 (PVC)
+                </h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2 shadow-sm" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}
+                        <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select class="form-control mr-2 shadow-sm" onchange="location.href='?cluster_id={{ current_cluster.id }}&namespace='+this.value">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}
+                        <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <button class="btn btn-success shadow-sm" onclick="$('#createPvcModal').modal('show')">
+                        <i class="fas fa-plus"></i> 创建 PVC
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card card-primary card-outline">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Namespace</th>
+                    <th>Status</th>
+                    <th>Capacity</th>
+                    <th>SC / Volume</th>
+                    <th>Mounted By (Pods)</th>
+                    <th>Age</th>
+                    <th style="width: 150px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in pvcs %}
+                <tr>
+                    <td class="font-weight-bold text-primary">{{ item.name }}</td>
+                    <td><span class="badge badge-light border">{{ item.namespace }}</span></td>
+                    <td>
+                        {% if item.status == 'Bound' %}
+                            <span class="badge badge-success">Bound</span>
+                        {% elif item.status == 'Pending' %}
+                            <span class="badge badge-warning">Pending</span>
+                        {% else %}
+                            <span class="badge badge-danger">{{ item.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.capacity }}</td>
+                    <td>
+                        <div class="small">SC: {{ item.storage_class|default:"-" }}</div>
+                        <div class="small text-muted">PV: {{ item.volume }}</div>
+                    </td>
+                    <td>
+                        {% for pod in item.mounted_by %}
+                            <a href="{% url 'k8s_workload_detail' %}?kind=Pod&name={{ pod }}&namespace={{ item.namespace }}&cluster_id={{ current_cluster.id }}" class="badge badge-info">{{ pod }}</a>
+                        {% empty %}
+                            <span class="text-muted small">-</span>
+                        {% endfor %}
+                    </td>
+                    <td>{{ item.age|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <button class="btn btn-xs btn-info" onclick="editYaml('pvc', '{{ item.name }}', '{{ item.namespace }}')">YAML</button>
+                        <button class="btn btn-xs btn-danger" onclick="deleteResource('pvc', '{{ item.name }}', '{{ item.namespace }}')">删除</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="8" class="text-center text-muted py-4">暂无 PVC 数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="createPvcModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">创建存储卷声明 (PVC)</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createPvcForm">
+                    <div class="form-group">
+                        <label>名称 (Name) <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="name" placeholder="my-pvc" required>
+                    </div>
+                    <div class="form-group">
+                        <label>命名空间 (Namespace) <span class="text-danger">*</span></label>
+                        <select class="form-control" name="namespace">
+                            {% for ns in namespaces %}
+                                <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>存储类 (StorageClass)</label>
+                        <input type="text" class="form-control" name="storage_class" placeholder="留空使用默认SC">
+                    </div>
+                    <div class="row">
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>容量</label>
+                                <input type="text" class="form-control" name="size" value="10Gi">
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="form-group">
+                                <label>模式</label>
+                                <select class="form-control" name="access_mode">
+                                    <option value="ReadWriteOnce">RWO (单节点读写)</option>
+                                    <option value="ReadWriteMany">RWX (多节点读写)</option>
+                                    <option value="ReadOnlyMany">ROX (多节点只读)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitCreatePvc()">立即创建</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'k8s/inc_storage_common.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% include 'k8s/inc_storage_js.html' %}
+
+<script>
+    function submitCreatePvc() {
+        const data = {
+            cluster_id: "{{ current_cluster.id }}",
+            name: $('input[name="name"]').val(),
+            namespace: $('select[name="namespace"]').val(),
+            storage_class: $('input[name="storage_class"]').val(),
+            size: $('input[name="size"]').val(),
+            access_mode: $('select[name="access_mode"]').val()
+        };
+
+        if(!data.name) { alert("请输入名称"); return; }
+
+        $.post("{% url 'k8s_pvc_create' %}", JSON.stringify(data), function(res) {
+            alert(res.msg);
+            if(res.status) location.reload();
+        });
+    }
+</script>
+{% endblock %}

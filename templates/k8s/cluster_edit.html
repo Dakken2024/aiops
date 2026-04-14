@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card card-primary">
+            <div class="card-header">
+                <h3 class="card-title">编辑集群: {{ cluster.name }}</h3>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>集群名称</label>
+                        <input name="name" class="form-control" value="{{ cluster.name }}" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>所属分组 (权限隔离)</label>
+                        <select name="group_id" class="form-control">
+                            <option value="">-- 全局/未分组 --</option>
+                            {% for g in all_groups %}
+                                <option value="{{ g.id }}" {% if cluster.group_id == g.id %}selected{% endif %}>
+                                    {{ g.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">修改分组后，只有拥有该分组权限的用户才能看到此集群。</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label>KubeConfig</label>
+                        <textarea name="kubeconfig" class="form-control" rows="10" required style="font-family:monospace; font-size:12px;">{{ cluster.kubeconfig }}</textarea>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{% url 'k8s_cluster_list' %}" class="btn btn-default">返回列表</a>
+                    <button type="submit" class="btn btn-primary float-right">保存修改</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

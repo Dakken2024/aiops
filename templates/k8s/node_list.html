@@ -1,0 +1,644 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    /* 核心样式 */
+    .node-name { font-weight: 600; color: #333; }
+    .node-ip { font-size: 12px; color: #999; }
+    .markdown-body { font-size: 14px; line-height: 1.6; }
+    .markdown-body pre { background: #f8f9fa; padding: 10px; border-radius: 4px; border: 1px solid #eee; }
+    .dropdown-item { font-size: 13px; cursor: pointer; }
+    .dropdown-item i { width: 20px; text-align: center; }
+
+    /* 任务输出区域样式 */
+    #taskOutput {
+        background: #e9ecef !important;
+        color: #333;
+        max-height: 300px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        font-size: 13px;
+        font-family: monospace;
+    }
+
+    /* 状态徽章 */
+    .badge-purple { background-color: #6f42c1; color: white; }
+    .text-orange { color: #fd7e14; }
+</style>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-server text-primary mr-2"></i>
+                    集群节点 (Nodes)
+                    {% if current_cluster %}
+                        <small class="text-muted ml-2">({{ current_cluster.name }})</small>
+                    {% endif %}
+                </h4>
+
+                <div class="form-inline">
+                    <label class="mr-2 text-muted font-weight-normal">切换集群：</label>
+                    <select class="form-control" onchange="location.href='?cluster_id='+this.value" style="min-width: 150px;">
+                        {% for c in clusters %}
+                            <option value="{{ c.id }}" {% if current_cluster and current_cluster.id == c.id %}selected{% endif %}>
+                                {{ c.name }}
+                            </option>
+                        {% empty %}
+                            <option disabled>暂无集群</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger alert-dismissible">
+    <button type="button" class="close" data-dismiss="alert">×</button>
+    <i class="icon fas fa-ban"></i> {{ error }}
+</div>
+{% endif %}
+
+<div class="card card-primary card-outline">
+    <div class="card-header">
+        <h3 class="card-title">节点状态概览</h3>
+        <div class="card-tools">
+            <button class="btn btn-sm btn-warning mr-2" onclick="$('#prewarmModal').modal('show')">
+                <i class="fas fa-fire"></i> 镜像预热
+            </button>
+
+            <button class="btn btn-sm btn-success mr-2" onclick="showAddNodeModal()">
+                <i class="fas fa-plus"></i> 扩容节点
+            </button>
+            <span class="badge badge-light">Total: {{ nodes|length }}</span>
+        </div>
+    </div>
+
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead>
+                <tr>
+                    <th>名称 / IP</th>
+                    <th>角色 (Role)</th>
+                    <th>状态 (Status)</th>
+                    <th>版本 (Kubelet/OS)</th>
+                    <th>运行时间</th>
+                    <th style="min-width: 250px;">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for n in nodes %}
+                <tr>
+                    <td>
+                        <div class="node-name">{{ n.name }}</div>
+                        <div class="node-ip"><i class="fas fa-network-wired"></i> {{ n.ip }}</div>
+                    </td>
+                    <td>
+                        {% if n.role == 'Master' %}
+                            <span class="badge badge-purple">Master</span>
+                        {% else %}
+                            <span class="badge badge-info">Worker</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if n.status == 'Ready' %}
+                            <span class="badge badge-success">Ready</span>
+                        {% else %}
+                            <span class="badge badge-danger">NotReady</span>
+                        {% endif %}
+
+                        {% if n.unschedulable %}
+                            <span class="badge badge-warning" title="禁止调度 (SchedulingDisabled)"><i class="fas fa-ban"></i> Cordoned</span>
+                        {% endif %}
+
+                        {% if n.reason %}
+                            <div class="text-danger text-xs mt-1">{{ n.reason }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div style="font-size: 13px;">{{ n.version }}</div>
+                        <div class="text-muted text-xs">{{ n.os|truncatechars:25 }}</div>
+                    </td>
+                    <td class="text-muted text-sm">
+                        {{ n.age|date:"Y-m-d H:i" }}
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-xs btn-default dropdown-toggle" data-toggle="dropdown" aria-expanded="false">
+                                <i class="fas fa-cogs"></i> 运维
+                            </button>
+                            <div class="dropdown-menu">
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="manageNode('{{ n.name }}')">
+                                    <i class="fas fa-tags text-primary"></i> 标签/污点管理
+                                </a>
+                                <div class="dropdown-divider"></div>
+
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="toggleCordon('{{ n.name }}', true)">
+                                    <i class="fas fa-pause-circle text-warning"></i> 停止调度 (Cordon)
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="toggleCordon('{{ n.name }}', false)">
+                                    <i class="fas fa-play-circle text-success"></i> 恢复调度 (Uncordon)
+                                </a>
+                                <div class="dropdown-divider"></div>
+
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="drainNode('{{ n.name }}')">
+                                    <i class="fas fa-filter text-orange"></i> 节点排水 (Drain)
+                                </a>
+                                <a class="dropdown-item" href="javascript:void(0)" onclick="deleteNode('{{ n.name }}')">
+                                    <i class="fas fa-trash-alt text-danger"></i> 节点缩容 (Delete)
+                                </a>
+                            </div>
+                        </div>
+
+                        <button class="btn btn-xs btn-outline-primary ml-1" onclick="diagnoseNode('{{ n.name }}', '{{ n.ip }}')" title="AI 故障诊断">
+                            <i class="fas fa-user-md"></i> 诊断
+                        </button>
+
+                        <button class="btn btn-xs btn-info ml-1" onclick="describeNode('{{ n.name }}')" title="查看详细信息 (kubectl describe)">
+                            <i class="fas fa-file-alt"></i> Desc
+                        </button>
+
+                        <button class="btn btn-xs btn-default ml-1" onclick="cleanImages('{{ n.name }}')" title="清理 <none> 悬空镜像">
+                            <i class="fas fa-broom text-secondary"></i> 清理
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-5 text-muted">
+                        {% if error %}
+                            <i class="fas fa-unlink fa-3x mb-3"></i><br>连接失败或未配置集群
+                        {% else %}
+                            <i class="fas fa-box-open fa-3x mb-3"></i><br>未找到节点信息
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="nodeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white"><i class="fas fa-microchip mr-1"></i> 节点故障深度分析</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="small text-muted">选择分析模型：</label>
+                    <select id="nodeModelSelect" class="form-control form-control-sm">
+                        {% for m in ai_models %}
+                        <option value="{{ m.id }}">{{ m.name }} ({{ m.model_name }})</option>
+                        {% empty %}
+                        <option value="">未配置模型 (使用默认)</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <hr>
+                <div id="nodeLoading" class="text-center py-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <h5 class="mt-3 font-weight-light">正在进行全栈诊断...</h5>
+                </div>
+                <div id="nodeContent" class="markdown-body" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="describeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Node Describe: <span id="describeTitle"></span></h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body bg-dark">
+                <pre id="describeContent" class="p-3 rounded"
+                     style="background-color: #1e1e1e;
+                            color: #d4d4d4;
+                            font-family: Consolas, monospace;
+                            font-size: 13px;
+                            white-space: pre-wrap;
+                            max-height: 650px;
+                            overflow: auto;
+                            border: 1px solid #444;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="manageNodeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">节点管理: <span id="manageNodeName" class="text-primary font-weight-bold"></span></h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeManageForm">
+                    <h6 class="text-dark border-bottom pb-2 mb-3">
+                        <i class="fas fa-tags text-info mr-1"></i> 标签 (Labels)
+                        <button type="button" class="btn btn-xs btn-success float-right" onclick="addLabelRow()">
+                            <i class="fas fa-plus"></i> 添加
+                        </button>
+                    </h6>
+                    <div class="table-responsive mb-4" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered" id="labelsTable">
+                            <thead class="thead-light"><tr><th>Key</th><th>Value</th><th style="width:50px"></th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+
+                    <h6 class="text-dark border-bottom pb-2 mb-3">
+                        <i class="fas fa-biohazard text-danger mr-1"></i> 污点 (Taints)
+                        <button type="button" class="btn btn-xs btn-success float-right" onclick="addTaintRow()">
+                            <i class="fas fa-plus"></i> 添加
+                        </button>
+                    </h6>
+                    <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                        <table class="table table-sm table-bordered" id="taintsTable">
+                            <thead class="thead-light"><tr><th>Key</th><th>Value</th><th>Effect</th><th style="width:50px"></th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="submitNodeChanges()">保存更改</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addNodeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-network-wired"></i> 节点扩容 (Add Node)</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="addNodeResult" style="display: none;"></div>
+                <form id="addNodeForm">
+                    <div class="form-group">
+                        <label class="font-weight-bold">Join Command <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <textarea class="form-control text-monospace" id="joinCommand" rows="3" placeholder="kubeadm join ..."></textarea>
+                            <div class="input-group-append">
+                                <button class="btn btn-info" type="button" onclick="autoGetToken()" id="btnGetToken" style="width: 100px;">
+                                    <i class="fas fa-key"></i><br>自动获取
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group bg-light p-2 border rounded">
+                        <div class="custom-control custom-switch">
+                            <input type="checkbox" class="custom-control-input" id="autoInstallEnv">
+                            <label class="custom-control-label font-weight-bold text-primary" for="autoInstallEnv">
+                                <i class="fas fa-magic"></i> 全自动安装依赖环境 (Auto Install)
+                            </label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="font-weight-bold">选择目标服务器 (CMDB)</label>
+                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                            <table class="table table-sm table-hover table-bordered" id="candidateTable">
+                                <thead class="thead-light">
+                                    <tr><th style="width: 40px" class="text-center"><input type="checkbox" id="selectAllCandidates"></th><th>主机名</th><th>IP地址</th><th>配置</th></tr>
+                                </thead>
+                                <tbody><tr><td colspan="4" class="text-center text-muted">加载中...</td></tr></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal" id="btnModalClose">关闭</button>
+                <button type="button" class="btn btn-primary" onclick="submitAddNode()" id="btnAddNodeSubmit">
+                    <i class="fas fa-play"></i> 开始扩容
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="prewarmModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-warning">
+                <h5 class="modal-title">全集群镜像预热</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info small">
+                    <i class="fas fa-info-circle"></i> 系统将创建一个 DaemonSet 并在所有节点（含 Master）拉取指定镜像。
+                </div>
+                <div class="form-group">
+                    <label>镜像地址 (Image) <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="prewarmImage" placeholder="例如: nginx:latest 或 registry.cn-hangzhou.../my-app:v1">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-warning" onclick="submitPrewarm()">开始预热</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 全局变量
+    let statusTimer = null;
+    const GLOBAL_TASK_KEY = 'k8s_add_node_task_id';
+
+    function getClusterId() {
+        return "{{ current_cluster.id|default:'' }}";
+    }
+
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                c = c.trim();
+                if (c.substring(0, name.length + 1) === (name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+            });
+        }
+        return v;
+    }
+    const csrftoken = getCookie('csrftoken') || "{{ csrf_token }}";
+
+    // --- 1. Describe 功能 ---
+    function describeNode(nodeName) {
+        const clusterId = getClusterId();
+        if (!clusterId) return;
+
+        $('#describeModal').modal('show');
+        $('#describeTitle').text(nodeName);
+        $('#describeContent').text('Loading...');
+
+        $.ajax({
+            url: '{% url "k8s_workload_describe" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({
+                cluster_id: clusterId,
+                kind: 'Node',
+                name: nodeName
+            }),
+            success: function(res) {
+                if(res.status) {
+                    $('#describeContent').text(res.describe);
+                } else {
+                    $('#describeContent').text("Error: " + res.msg);
+                }
+            },
+            error: function() { $('#describeContent').text("Network Error"); }
+        });
+    }
+
+    // --- 2. 诊断功能 ---
+    function diagnoseNode(name, ip) {
+        if (!getClusterId()) return;
+        $('#nodeModal').modal('show');
+        $('#nodeContent').hide();
+        $('#nodeLoading').show();
+
+        $.ajax({
+            url: '{% url "k8s_node_diagnose" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({ 'cluster_id': getClusterId(), 'node_name': name, 'node_ip': ip, 'model_id': $('#nodeModelSelect').val() }),
+            headers: {'X-CSRFToken': csrftoken},
+            success: function(res) {
+                $('#nodeLoading').hide();
+                $('#nodeContent').html(res.status ? marked.parse(res.analysis) : '<div class="alert alert-danger">'+res.msg+'</div>').show();
+            },
+            error: function() { $('#nodeLoading').hide(); $('#nodeContent').html('<div class="alert alert-danger">网络错误</div>').show(); }
+        });
+    }
+
+    // --- 3. 标签/污点管理 ---
+    let currentManageNode = "";
+    function manageNode(nodeName) {
+        if (!getClusterId()) return;
+        currentManageNode = nodeName;
+        $('#manageNodeName').text(nodeName);
+        $('#labelsTable tbody').empty();
+        $('#taintsTable tbody').empty();
+        $('#manageNodeModal').modal('show');
+
+        const url = "{% url 'k8s_node_details' 'NODENAME' %}".replace('NODENAME', nodeName);
+        $.get(url + `?cluster_id=${getClusterId()}`, function(res) {
+            if (res.status) {
+                $.each(res.labels || {}, function(k, v) { addLabelRow(k, v); });
+                $.each(res.taints || [], function(i, t) { addTaintRow(t.key, t.value, t.effect); });
+            } else { alert("加载失败: " + res.msg); }
+        });
+    }
+
+    function addLabelRow(key="", value="") {
+        const row = `<tr><td><input type="text" class="form-control form-control-sm label-key" value="${key}"></td>
+                         <td><input type="text" class="form-control form-control-sm label-val" value="${value}"></td>
+                         <td class="text-center"><button class="btn btn-xs btn-danger" onclick="$(this).closest('tr').remove()"><i class="fas fa-trash"></i></button></td></tr>`;
+        $('#labelsTable tbody').append(row);
+    }
+
+    function addTaintRow(key="", value="", effect="NoSchedule") {
+        const effects = ['NoSchedule', 'PreferNoSchedule', 'NoExecute'].map(e => `<option value="${e}" ${e===effect?'selected':''}>${e}</option>`).join('');
+        const row = `<tr><td><input type="text" class="form-control form-control-sm taint-key" value="${key}"></td>
+                         <td><input type="text" class="form-control form-control-sm taint-val" value="${value||''}"></td>
+                         <td><select class="form-control form-control-sm taint-effect">${effects}</select></td>
+                         <td class="text-center"><button class="btn btn-xs btn-danger" onclick="$(this).closest('tr').remove()"><i class="fas fa-trash"></i></button></td></tr>`;
+        $('#taintsTable tbody').append(row);
+    }
+
+    function submitNodeChanges() {
+        let labels = {};
+        $('#labelsTable tbody tr').each(function() {
+            let k = $(this).find('.label-key').val().trim();
+            if(k) labels[k] = $(this).find('.label-val').val().trim();
+        });
+        let taints = [];
+        $('#taintsTable tbody tr').each(function() {
+            let k = $(this).find('.taint-key').val().trim();
+            if(k) taints.push({key: k, value: $(this).find('.taint-val').val().trim(), effect: $(this).find('.taint-effect').val()});
+        });
+
+        $.ajax({
+            url: '{% url "k8s_node_update" %}', type: 'POST', contentType: 'application/json', headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({ cluster_id: getClusterId(), node_name: currentManageNode, labels: labels, taints: taints }),
+            success: function(res) {
+                if (res.status) { alert("更新成功"); $('#manageNodeModal').modal('hide'); location.reload(); }
+                else alert("更新失败: " + res.msg);
+            }
+        });
+    }
+
+    // --- 4. 运维操作 ---
+    function toggleCordon(nodeName, unschedulable) {
+        if (!confirm(`确定要 ${unschedulable?"停止":"恢复"} 节点 ${nodeName} 的调度吗？`)) return;
+        $.ajax({
+            url: '{% url "k8s_node_cordon" %}', type: 'POST', contentType: 'application/json', headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({ cluster_id: getClusterId(), node_name: nodeName, unschedulable: unschedulable }),
+            success: function(res) { if(res.status) { alert(res.msg); location.reload(); } else alert(res.msg); }
+        });
+    }
+
+    function drainNode(nodeName) {
+        if (!confirm(`【高风险】确定要排空节点 ${nodeName} 吗？`)) return;
+        alert("正在后台排水，请稍候...");
+        $.ajax({
+            url: '{% url "k8s_node_drain" %}', type: 'POST', contentType: 'application/json', headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({ cluster_id: getClusterId(), node_name: nodeName }),
+            success: function(res) { if(res.status) { alert(res.msg); location.reload(); } else alert("排水失败: " + res.msg); }
+        });
+    }
+
+    function deleteNode(nodeName) {
+        if (!confirm(`确定要删除节点 ${nodeName} 吗？此操作不可逆！`)) return;
+        $.ajax({
+            url: '{% url "k8s_node_delete" %}', type: 'POST', contentType: 'application/json', headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({ cluster_id: getClusterId(), node_name: nodeName }),
+            success: function(res) { if(res.status) { alert(res.msg); location.reload(); } else alert("删除失败: " + res.msg); }
+        });
+    }
+
+    // --- 5. 扩容 ---
+    function showAddNodeModal() {
+        if (!getClusterId()) return;
+        $('#addNodeModal').modal('show');
+        $('#addNodeResult').hide().empty();
+        $('#addNodeForm').show();
+        $('#btnAddNodeSubmit').show().prop('disabled', false);
+        loadCandidates(getClusterId());
+        checkAndLoadBackgroundTask();
+    }
+
+    function loadCandidates(cid) {
+        $('#candidateTable tbody').html('<tr><td colspan="4" class="text-center">加载中...</td></tr>');
+        $.get("{% url 'k8s_node_candidates' %}?cluster_id=" + cid, function(res) {
+            const tbody = $('#candidateTable tbody'); tbody.empty();
+            if (res.status && res.candidates.length > 0) {
+                res.candidates.forEach(s => {
+                    tbody.append(`<tr><td class="text-center"><input type="checkbox" class="candidate-chk" value="${s.id}"></td>
+                                  <td>${s.hostname}</td><td>${s.ip}</td><td><small>${s.cpu}C/${s.mem}G</small></td></tr>`);
+                });
+            } else { tbody.html('<tr><td colspan="4" class="text-center">暂无可用服务器</td></tr>'); }
+        });
+    }
+
+    function autoGetToken() {
+        const btn = $('#btnGetToken'); const oldHtml = btn.html();
+        btn.prop('disabled', true).html('获取中...');
+        $.get("{% url 'k8s_node_get_token' %}?cluster_id=" + getClusterId(), function(res) {
+            btn.prop('disabled', false).html(oldHtml);
+            if(res.status) $('#joinCommand').val(res.command);
+            else alert("获取失败: " + res.msg);
+        });
+    }
+
+    function submitAddNode() {
+        const cmd = $('#joinCommand').val();
+        const ids = [];
+        $('.candidate-chk:checked').each(function() { ids.push($(this).val()); });
+        if(!cmd || ids.length === 0) { alert("请完善信息"); return; }
+
+        if(!confirm("确定开始扩容？")) return;
+
+        $('#btnAddNodeSubmit').prop('disabled', true).html('提交中...');
+        $.ajax({
+            url: '{% url "k8s_node_add" %}', type: 'POST', contentType: 'application/json', headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({ cluster_id: getClusterId(), server_ids: ids, join_command: cmd, auto_install: $('#autoInstallEnv').is(':checked') }),
+            success: function(res) {
+                if(res.status) {
+                    localStorage.setItem(GLOBAL_TASK_KEY, res.task_id);
+                    $('#addNodeForm').hide();
+                    $('#addNodeResult').show().html(`<div class="alert alert-info">任务已提交 (ID: ${res.task_id})，正在后台执行...<pre id="taskOutput"></pre></div>`);
+                    pollTaskStatus(res.task_id);
+                } else { alert(res.msg); $('#btnAddNodeSubmit').prop('disabled', false).html('开始扩容'); }
+            }
+        });
+    }
+
+    function pollTaskStatus(taskId) {
+        if(statusTimer) clearInterval(statusTimer);
+        statusTimer = setInterval(() => {
+            $.get("{% url 'k8s_node_task_status' %}?task_id=" + taskId, function(res) {
+                if(res.result) {
+                    $('#taskOutput').html(res.result);
+                    document.getElementById('taskOutput').scrollTop = 99999;
+                }
+                if(res.ready) {
+                    clearInterval(statusTimer);
+                    localStorage.removeItem(GLOBAL_TASK_KEY);
+                    $('#btnAddNodeSubmit').hide();
+                    $('#btnModalClose').text('完成并刷新').attr('onclick', 'location.reload()');
+                }
+            });
+        }, 2000);
+    }
+
+    function checkAndLoadBackgroundTask() {
+        const tid = localStorage.getItem(GLOBAL_TASK_KEY);
+        if(tid) {
+            $('#addNodeForm').hide();
+            $('#addNodeResult').show().html(`<div class="alert alert-warning">检测到未完成的任务 (ID: ${tid})，正在恢复日志...<pre id="taskOutput"></pre></div>`);
+            pollTaskStatus(tid);
+        }
+    }
+
+    // --- 6. 镜像操作 (清理/预热) ---
+    function cleanImages(nodeName) {
+        if(!confirm(`确定要清理节点 [${nodeName}] 上的悬空镜像吗？\n这将释放磁盘空间。`)) return;
+
+        // 简单的 Loading 提示
+        const btn = event.target;
+        $(btn).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+        $.post("{% url 'k8s_node_image_ops' %}", {
+            action: 'clean',
+            cluster_id: getClusterId(),
+            node_name: nodeName,
+            csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            $(btn).prop('disabled', false).html('<i class="fas fa-broom text-secondary"></i> 清理');
+            if(res.status) {
+                alert(res.msg);
+            } else {
+                alert("清理失败: " + res.msg);
+            }
+        });
+    }
+
+    function submitPrewarm() {
+        const img = $('#prewarmImage').val();
+        if(!img) { alert("请输入镜像地址"); return; }
+
+        if(!confirm("确定要在所有节点拉取此镜像吗？")) return;
+
+        $.post("{% url 'k8s_node_image_ops' %}", {
+            action: 'prewarm',
+            cluster_id: getClusterId(),
+            image: img,
+            csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            $('#prewarmModal').modal('hide');
+            alert(res.msg);
+        });
+    }
+
+    $('#selectAllCandidates').change(function() { $('.candidate-chk').prop('checked', this.checked); });
+</script>
+{% endblock %}

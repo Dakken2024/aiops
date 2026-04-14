@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.7.0/lib/xterm-addon-fit.min.js"></script>
+
+<div class="card card-dark">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-film"></i> 回放: {{ log.server.hostname }}
+            <small class="text-muted">操作人: {{ log.user.username }}</small>
+        </h3>
+        <div class="card-tools">
+            <button class="btn btn-tool" onclick="replay()">
+                <i class="fas fa-redo"></i> 重播
+            </button>
+            <a href="{% url 'terminal_log_list' %}" class="btn btn-tool">返回列表</a>
+        </div>
+    </div>
+
+    <div class="card-body p-0" style="background-color: #000;">
+        <div id="terminal" style="width: 100%; height: 500px;"></div>
+    </div>
+
+    <div class="card-footer">
+        <div class="progress" style="height: 5px;">
+            <div id="progressBar" class="progress-bar bg-success" style="width: 0%"></div>
+        </div>
+        <small id="statusText" class="text-muted mt-1 d-block">准备就绪</small>
+    </div>
+</div>
+
+<script>
+    // 1. 获取后端传来的录像数据
+    // safe 过滤器非常重要，防止 Django 转义引号
+    const records = {{ records_json|safe }};
+
+    let term = null;
+    let fitAddon = null;
+    let timerIds = []; // 存储所有定时器ID，用于停止播放
+
+    // 初始化终端
+    function initTerm() {
+        if (term) term.dispose(); // 如果已有实例，先销毁
+
+        const terminalContainer = document.getElementById('terminal');
+        terminalContainer.innerHTML = ''; // 清空容器
+
+        term = new Terminal({
+            cursorBlink: false, // 回放时不需要光标闪烁
+            disableStdin: true, // 禁止用户输入
+            fontSize: 14,
+            fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+            theme: { background: '#1e1e1e' },
+            rows: 30, // 初始行数，最好根据录制时的数据动态调整
+        });
+
+        fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(terminalContainer);
+        fitAddon.fit();
+
+        window.addEventListener('resize', () => fitAddon.fit());
+    }
+
+    // 开始播放核心逻辑
+    function replay() {
+        // 1. 清理上一轮
+        timerIds.forEach(id => clearTimeout(id));
+        timerIds = [];
+        initTerm();
+
+        if (!records || records.length === 0) {
+            term.write('\r\n\x1b[31m[Error] 录像数据为空或解析失败。\x1b[0m');
+            return;
+        }
+
+        const startTime = records[0].time;
+        const totalDuration = records[records.length - 1].time - startTime;
+        let playedCount = 0;
+
+        document.getElementById('statusText').innerText = '正在播放...';
+
+        // 2. 遍历每一帧数据，设置定时器
+        records.forEach((record, index) => {
+            const delay = (record.time - startTime) * 1000; // 计算相对时间(毫秒)
+
+            const timerId = setTimeout(() => {
+                // 写入终端 (Xterm.js 会自动解析 ANSI 颜色代码)
+                term.write(record.data);
+
+                // 更新进度条
+                playedCount++;
+                const percent = (playedCount / records.length) * 100;
+                document.getElementById('progressBar').style.width = percent + '%';
+
+                if (index === records.length - 1) {
+                    document.getElementById('statusText').innerText = '播放结束';
+                }
+            }, delay);
+
+            timerIds.push(timerId);
+        });
+    }
+
+    // 页面加载完成后自动播放
+    document.addEventListener('DOMContentLoaded', () => {
+        // 稍微延迟一下确保 DOM 渲染完毕
+        setTimeout(replay, 500);
+    });
+
+</script>
+{% endblock %}

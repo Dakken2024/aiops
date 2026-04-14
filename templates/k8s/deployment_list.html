@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-cubes text-primary mr-2"></i>应用管理 (Deployments)
+                </h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}
+                        <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select class="form-control" onchange="changeNamespace(this.value)">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}
+                        <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Name</th>
+                    <th>Replicas</th>
+                    <th>Image</th>
+                    <th>Age</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for d in deployments %}
+                <tr>
+                    <td><span class="badge badge-light border">{{ d.namespace }}</span></td>
+                    <td><b>{{ d.name }}</b></td>
+                    <td>
+                        <span class="badge badge-info" style="font-size:14px;">{{ d.ready }}</span>
+                    </td>
+                    <td><small class="text-muted">{{ d.image|truncatechars:40 }}</small></td>
+                    <td>{{ d.age|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-xs btn-primary" onclick="openScaleModal('{{ d.name }}', '{{ d.namespace }}', {{ d.replicas }})">
+                                <i class="fas fa-arrows-alt-h"></i> 扩缩容
+                            </button>
+                            <a href="{% url 'k8s_workload_detail' %}?kind=Deployment&name={{ d.name }}&namespace={{ d.namespace }}&cluster_id={{ current_cluster.id }}"
+                               class="btn btn-xs btn-info ml-1">
+                                <i class="fas fa-eye"></i> 详情
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="scaleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">调整副本数</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p>调整应用 <b><span id="scaleName"></span></b> 的 Pod 数量：</p>
+                <div class="form-group">
+                    <input type="number" id="scaleNum" class="form-control" min="0" max="20">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="submitScale()">确认调整</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 切换 Namespace 保留 Cluster 参数
+    function changeNamespace(ns) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('namespace', ns);
+        window.location.search = urlParams.toString();
+    }
+
+    let targetName = '', targetNs = '';
+    
+    function openScaleModal(name, ns, current) {
+        targetName = name;
+        targetNs = ns;
+        $('#scaleName').text(name);
+        $('#scaleNum').val(current);
+        $('#scaleModal').modal('show');
+    }
+
+    function submitScale() {
+        const replicas = $('#scaleNum').val();
+        const clusterId = "{{ current_cluster.id }}";
+        
+        $.ajax({
+            url: '{% url "k8s_deployment_scale" %}',
+            type: 'POST',
+            data: {
+                cluster_id: clusterId,
+                namespace: targetNs,
+                name: targetName,
+                replicas: replicas
+            },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(res) {
+                alert(res.msg);
+                location.reload();
+            }
+        });
+    }
+</script>
+{% endblock %}

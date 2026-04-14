@@ -1,0 +1,340 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-3">
+        <div class="card card-outline card-secondary" style="height: 80vh;">
+            <div class="card-header">
+                <h3 class="card-title">版本历史</h3>
+            </div>
+            <div class="card-body p-0" style="overflow-y: auto;">
+                <div id="historyList" class="list-group list-group-flush">
+                    <div class="text-center p-3 text-muted">正在加载...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-9">
+        <div class="card card-primary card-outline" style="height: 80vh; display: flex; flex-direction: column;">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div class="form-inline">
+                    <input type="text" id="scriptName" class="form-control font-weight-bold mr-2" placeholder="脚本名称 (如 test.sh)" value="{{ script.name }}" style="width: 200px;">
+                    <select id="scriptType" class="form-control mr-2" onchange="updateLanguage()">
+                        <option value="sh" {% if script.script_type == 'sh' %}selected{% endif %}>Shell (.sh)</option>
+                        <option value="py" {% if script.script_type == 'py' %}selected{% endif %}>Python (.py)</option>
+                        <option value="yml" {% if script.script_type == 'yml' %}selected{% endif %}>Ansible (.yml)</option>
+                    </select>
+
+                    <div class="input-group" title="选择用于 AI 辅助功能的模型">
+                        <div class="input-group-prepend">
+                            <span class="input-group-text"><i class="fas fa-robot"></i></span>
+                        </div>
+                        <select id="globalAiModel" class="form-control" style="width: 130px;">
+                            <option value="">默认模型</option>
+                            {% for m in ai_models %}
+                            <option value="{{ m.id }}">{{ m.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="btn-group mr-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="showAiGenerateModal()" title="根据描述生成新脚本">
+                            <i class="fas fa-magic"></i> 生成
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm" onclick="callAiAssist('optimize')" title="优化当前代码质量和性能">
+                            <i class="fas fa-rocket"></i> 优化
+                        </button>
+                        <button type="button" class="btn btn-outline-info btn-sm" onclick="callAiAssist('explain')" title="解释代码含义">
+                            <i class="fas fa-book"></i> 解释
+                        </button>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="callAiAssist('check')" title="检查安全风险">
+                            <i class="fas fa-shield-alt"></i> 审计
+                        </button>
+                    </div>
+
+                    <button class="btn btn-warning btn-sm mr-1" id="btnExitDiff" onclick="exitDiffMode()" style="display:none;">
+                        <i class="fas fa-times"></i> 退出对比
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="saveScript()">
+                        <i class="fas fa-save"></i> 保存 (Ctrl+S)
+                    </button>
+                </div>
+            </div>
+
+            <div class="card-body p-0 flex-grow-1">
+                <div id="monaco-container" style="width: 100%; height: 100%;"></div>
+            </div>
+
+            <div class="card-footer">
+                <input type="text" id="saveMemo" class="form-control form-control-sm" placeholder="变更备注 (可选，例如: 修复了空指针 bug)">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="aiGenerateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-robot text-primary"></i> AI 智能写脚本</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>请输入您的需求：</label>
+                    <textarea class="form-control" id="aiRequirement" rows="4" placeholder="例如：写一个自动备份 MySQL 数据库并上传到 FTP 的 Shell 脚本，保留最近7天的备份。"></textarea>
+                </div>
+                <small class="text-muted"><i class="fas fa-info-circle"></i> 将使用顶部工具栏选定的 AI 模型进行生成。</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="callAiAssist('generate')">开始生成</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="aiResultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="aiResultTitle">AI 分析结果</h5>
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="aiResultContent" style="white-space: pre-wrap; background: #f8f9fa; padding: 15px; border-radius: 5px; font-size: 13px; font-family: Consolas, monospace; max-height: 65vh; overflow-y: auto;"></pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-dismiss="modal">知道了</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+    // --- 全局变量 ---
+    var editor, diffEditor;
+    var scriptId = "{{ script.id|default:'' }}";
+    var currentContent = `{{ script.content|escapejs }}`; // 初始内容
+
+    // CSRF
+    const csrftoken = "{{ csrf_token }}";
+
+    // --- 初始化 Monaco ---
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+    require(['vs/editor/editor.main'], function() {
+        initEditor();
+    });
+
+    function initEditor() {
+        // 销毁旧的
+        if(editor) editor.dispose();
+        $('#monaco-container').empty();
+
+        // 语言映射
+        const typeMap = {'sh': 'shell', 'py': 'python', 'yml': 'yaml'};
+        const lang = typeMap[$('#scriptType').val()] || 'shell';
+
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: currentContent,
+            language: lang,
+            theme: 'vs', // 浅色主题
+            automaticLayout: true,
+            fontSize: 14,
+            minimap: { enabled: true }
+        });
+
+        // 绑定 Ctrl+S
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+            saveScript();
+        });
+    }
+
+    function updateLanguage() {
+        const typeMap = {'sh': 'shell', 'py': 'python', 'yml': 'yaml'};
+        const lang = typeMap[$('#scriptType').val()];
+        if(editor) monaco.editor.setModelLanguage(editor.getModel(), lang);
+    }
+
+    // --- 历史记录 ---
+    $(document).ready(function() {
+        if(scriptId) loadHistory();
+    });
+
+    function loadHistory() {
+        $.post("{% url 'script_api' %}", {
+            action: 'history_list', script_id: scriptId, csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            let html = '';
+            if(res.status && res.data.length > 0) {
+                res.data.forEach(h => {
+                    html += `
+                    <a href="javascript:void(0)" class="list-group-item list-group-item-action" onclick="diffVersion(${h.id}, ${h.version})">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1 text-primary">v${h.version}</h6>
+                            <small>${new Date(h.created_at).toLocaleDateString()}</small>
+                        </div>
+                        <p class="mb-1 small text-muted">${h.memo || 'Update'}</p>
+                        <small>By ${h.created_by}</small>
+                    </a>`;
+                });
+            } else {
+                html = '<div class="text-center p-3 text-muted">暂无历史</div>';
+            }
+            $('#historyList').html(html);
+        });
+    }
+
+    // --- Diff 模式 ---
+    function diffVersion(histId, ver) {
+        currentContent = editor.getValue();
+        $.post("{% url 'script_api' %}", {
+            action: 'get_history', history_id: histId, csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            if(res.status) {
+                startDiff(res.content, currentContent, ver);
+            }
+        });
+    }
+
+    function startDiff(oldText, newText, ver) {
+        if(editor) editor.dispose();
+        $('#monaco-container').empty();
+        $('#btnExitDiff').show();
+
+        diffEditor = monaco.editor.createDiffEditor(document.getElementById('monaco-container'), {
+            theme: 'vs', automaticLayout: true, readOnly: true
+        });
+
+        const typeMap = {'sh': 'shell', 'py': 'python', 'yml': 'yaml'};
+        const lang = typeMap[$('#scriptType').val()];
+
+        diffEditor.setModel({
+            original: monaco.editor.createModel(oldText, lang),
+            modified: monaco.editor.createModel(newText, lang)
+        });
+
+        alert(`进入对比模式：左侧为 v${ver}，右侧为当前编辑内容。`);
+    }
+
+    function exitDiffMode() {
+        if(diffEditor) diffEditor.dispose();
+        $('#btnExitDiff').hide();
+        initEditor();
+    }
+
+    // --- 保存 ---
+    function saveScript() {
+        if(diffEditor) { alert("请先退出对比模式"); return; }
+
+        const name = $('#scriptName').val();
+        if(!name) { alert("请输入脚本名称"); return; }
+
+        const content = editor.getValue();
+        const memo = $('#saveMemo').val();
+
+        $.post("{% url 'script_api' %}", {
+            action: 'save',
+            script_id: scriptId,
+            name: name,
+            type: $('#scriptType').val(),
+            content: content,
+            memo: memo,
+            csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            if(res.status) {
+                alert("保存成功！");
+                if(!scriptId) {
+                    window.location.href = "/script/edit/" + res.script_id + "/";
+                } else {
+                    loadHistory();
+                    $('#saveMemo').val('');
+                }
+            } else {
+                alert("保存失败: " + res.msg);
+            }
+        });
+    }
+
+    // --- AI 助手功能 (核心更新) ---
+
+    function showAiGenerateModal() {
+        $('#aiGenerateModal').modal('show');
+    }
+
+    function callAiAssist(action) {
+        if(diffEditor) { alert("请先退出对比模式"); return; }
+
+        // 1. 获取参数
+        let content = "";
+        let scriptType = $('#scriptType').val() || 'sh';
+        let modelId = $('#globalAiModel').val(); // 获取全局选中的模型 ID
+
+        if (action === 'generate') {
+            content = $('#aiRequirement').val();
+            if (!content) { alert("请输入需求描述！"); return; }
+            $('#aiGenerateModal').modal('hide');
+        } else {
+            // 优化/解释/审计 均需要获取编辑器内容
+            content = editor.getValue();
+            if (!content || content.trim() === "") { alert("编辑器内容为空，无法分析！"); return; }
+        }
+
+        // 2. 按钮状态 Loading
+        let loadingBtn = event.currentTarget;
+        let originalHtml = $(loadingBtn).html();
+        $(loadingBtn).html('<i class="fas fa-spinner fa-spin"></i> 处理中...').prop('disabled', true);
+
+        // 3. 请求后端
+        $.ajax({
+            url: "{% url 'script_ai_api' %}",
+            type: "POST",
+            data: {
+                'action': action,
+                'content': content,
+                'type': scriptType,
+                'model_id': modelId, // 传递模型 ID
+                'csrfmiddlewaretoken': csrftoken
+            },
+            success: function(res) {
+                if (res.status) {
+                    if (action === 'generate') {
+                        // 生成：直接替换
+                        if(confirm("AI 代码已生成，是否覆盖当前编辑器内容？\n(原有内容将丢失，建议先备份)")) {
+                            editor.setValue(res.data);
+                        }
+                    }
+                    else if (action === 'optimize') {
+                        // 优化：提示替换
+                        if(confirm("AI 已完成代码优化，是否用优化后的代码替换当前内容？\n(建议您先手动复制备份原代码)")) {
+                            editor.setValue(res.data);
+                        }
+                    }
+                    else {
+                        // 解释/审计：弹窗展示文本
+                        let titleMap = {'explain': '📜 代码解释', 'check': '🛡️ 安全审计报告'};
+                        $('#aiResultTitle').text(titleMap[action] || 'AI 分析结果');
+                        $('#aiResultContent').text(res.data);
+                        $('#aiResultModal').modal('show');
+                    }
+                } else {
+                    alert("AI 调用失败: " + res.msg);
+                }
+            },
+            error: function(xhr, status, error) {
+                alert("请求出错: " + error);
+            },
+            complete: function() {
+                // 4. 恢复按钮
+                $(loadingBtn).html(originalHtml).prop('disabled', false);
+            }
+        });
+    }
+</script>
+{% endblock %}

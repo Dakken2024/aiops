@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card card-success">
+            <div class="card-header"><h3 class="card-title">添加 K8s 集群</h3></div>
+            <form method="post">
+                {% csrf_token %}
+                <div class="card-body">
+                    <div class="form-group">
+                        <label>集群名称</label>
+                        <input name="name" class="form-control" placeholder="例如: Prod-Cluster" required>
+                    </div>
+
+                    {% if request.user.is_superuser %}
+                    <div class="form-group">
+                        <label>所属分组 (权限隔离)</label>
+                        <select name="group_id" class="form-control">
+                            <option value="">-- 全局/未分组 --</option>
+                            {% for g in all_groups %}
+                                <option value="{{ g.id }}">{{ g.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">普通用户只能看到其角色绑定分组下的集群。</small>
+                    </div>
+                    {% endif %}
+                    <div class="form-group">
+                        <label>KubeConfig 内容</label>
+                        <textarea name="kubeconfig" class="form-control" rows="10" placeholder="请粘贴 ~/.kube/config 的完整内容..." required style="font-family:monospace; font-size:12px;"></textarea>
+                        <small class="text-muted">服务端需要能通过此配置访问集群 API。</small>
+                    </div>
+                </div>
+                <div class="card-footer"><button type="submit" class="btn btn-success">保存配置</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card card-primary card-outline">
+            <div class="card-header"><h3 class="card-title">已纳管集群</h3></div>
+            <div class="card-body p-0">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px">ID</th>
+                            <th>名称</th>
+                            <th>所属分组</th> <th>Agent Token</th>
+                            <th style="width: 100px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for c in clusters %}
+                        <tr>
+                            <td>{{ c.id }}</td>
+                            <td>
+                                <a href="{% url 'k8s_cluster_dashboard' %}?cluster_id={{ c.id }}" class="font-weight-bold text-dark">
+                                    {{ c.name }}
+                                </a>
+                            </td>
+
+                            <td>
+                                {% if c.group %}
+                                    <span class="badge badge-info">{{ c.group.name }}</span>
+                                {% else %}
+                                    <span class="badge badge-secondary">全局</span>
+                                {% endif %}
+                            </td>
+
+                            <td>
+                                <div class="input-group input-group-sm" style="width: 260px;">
+                                    <input type="text" class="form-control" value="{{ c.token }}" id="token-{{ c.id }}" readonly>
+                                    <span class="input-group-append">
+                                        <button type="button" class="btn btn-default btn-flat" onclick="copyToken('token-{{ c.id }}')">
+                                            <i class="fas fa-copy"></i>
+                                        </button>
+                                    </span>
+                                </div>
+                            </td>
+                            <td>
+                                {% if request.user.is_superuser %}
+                                <a href="{% url 'k8s_cluster_edit' c.id %}" class="btn btn-xs btn-info" title="编辑配置">
+                                    <i class="fas fa-edit"></i> 编辑
+                                </a>
+                                <a href="{% url 'k8s_cluster_delete' c.id %}" class="btn btn-xs btn-danger" onclick="return confirm('确定移除该集群配置吗？')">
+                                    <i class="fas fa-trash"></i> 移除
+                                </a>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center text-muted py-4">暂无集群</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function copyToken(elementId) {
+        var copyText = document.getElementById(elementId);
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        document.execCommand("copy");
+        // 建议改为 Toast 或 Layer 提示，alert 体验稍差
+        // alert("Token 已复制");
+    }
+</script>
+{% endblock %}

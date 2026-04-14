@@ -1,0 +1,104 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+<script>
+    // --- Monaco Editor 初始化 ---
+    var editor;
+    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+
+    // 延迟初始化
+    require(['vs/editor/editor.main'], function() {
+        editor = monaco.editor.create(document.getElementById('monaco-container'), {
+            value: "# Loading...",
+            language: 'yaml',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            fontSize: 14,
+            minimap: { enabled: true },
+            scrollBeyondLastLine: false
+        });
+    });
+
+    // 状态变量
+    let currentEdit = { kind: '', name: '', namespace: '' };
+    // 使用全局变量或默认值，防止报错
+    const globalClusterId = "{{ current_cluster.id }}";
+    const apiBaseUrl = "{% url 'k8s_storage_api' %}";
+
+    // 获取 CSRF (兼容不同模板上下文)
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                c = c.trim();
+                if (c.substring(0, name.length + 1) === (name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+            });
+        }
+        return v;
+    }
+    const csrftoken = getCookie('csrftoken') || "{{ csrf_token }}";
+
+    // --- 1. 打开 YAML 编辑器 (Get) ---
+    window.editYaml = function(kind, name, ns) {
+        currentEdit = { kind, name, namespace: ns };
+        $('#yamlEditTitle').text(`${kind.toUpperCase()} / ${name}`);
+
+        // 关键点：此时 AdminLTE 已经加载完毕，modal() 方法可用
+        $('#yamlEditModal').modal('show');
+
+        if(editor) editor.setValue("# Loading YAML data...");
+
+        $.get(apiBaseUrl, {
+            action: 'get_yaml',
+            cluster_id: globalClusterId,
+            kind: kind,
+            name: name,
+            namespace: ns
+        }, function(res) {
+            if(res.status && editor) {
+                editor.setValue(res.yaml);
+            } else {
+                if(editor) editor.setValue("# Error: " + res.msg);
+                else alert(res.msg);
+            }
+        });
+    }
+
+    // --- 2. 提交 YAML 更新 (Update) ---
+    window.submitYamlUpdate = function() {
+        if(!editor) return;
+        if(!confirm("确定要应用此 YAML 修改吗？")) return;
+
+        $.post(apiBaseUrl, {
+            action: 'update',
+            cluster_id: globalClusterId,
+            kind: currentEdit.kind,
+            name: currentEdit.name,
+            namespace: currentEdit.namespace,
+            yaml: editor.getValue(),
+            csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            alert(res.msg);
+            if(res.status) {
+                $('#yamlEditModal').modal('hide');
+                location.reload();
+            }
+        });
+    }
+
+    // --- 3. 删除资源 (Delete) ---
+    window.deleteResource = function(kind, name, ns) {
+        if(!confirm(`⚠️ 高危操作：确定要删除 ${kind.toUpperCase()} [${name}] 吗？\n删除后数据可能无法恢复！`)) return;
+
+        $.post(apiBaseUrl, {
+            action: 'delete',
+            cluster_id: globalClusterId,
+            kind: kind,
+            name: name,
+            namespace: ns,
+            csrfmiddlewaretoken: csrftoken
+        }, function(res) {
+            alert(res.msg);
+            if(res.status) location.reload();
+        });
+    }
+</script>

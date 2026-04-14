@@ -1,0 +1,212 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card card-primary card-outline" style="height: 600px;">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-server mr-1"></i> 1. 选择目标主机</h3>
+            </div>
+            <div class="card-body p-0" style="overflow-y: auto;">
+                <div class="p-3 bg-light border-bottom sticky-top">
+                    <div class="custom-control custom-checkbox">
+                        <input class="custom-control-input" type="checkbox" id="checkAll">
+                        <label for="checkAll" class="custom-control-label font-weight-bold">全选所有主机</label>
+                    </div>
+                </div>
+
+                <div class="p-2">
+                    {% for group in groups %}
+                    <div class="mb-2">
+                        <div class="px-2 py-1 bg-secondary rounded text-xs font-weight-bold mb-1">
+                            {{ group.name }} <span class="badge badge-light float-right">{{ group.server_set.count }}</span>
+                        </div>
+                        <ul class="list-group list-group-flush ml-2 border-left">
+                            {% for server in group.server_set.all %}
+                            <li class="list-group-item py-1 px-2 border-0">
+                                <div class="custom-control custom-checkbox">
+                                    <input class="custom-control-input server-chk" type="checkbox" id="srv_{{ server.id }}" value="{{ server.id }}">
+                                    <label for="srv_{{ server.id }}" class="custom-control-label small" style="cursor: pointer;">
+                                        <span class="text-dark font-weight-bold">{{ server.hostname }}</span>
+                                        <span class="text-muted ml-1">({{ server.ip_address }})</span>
+                                    </label>
+                                </div>
+                            </li>
+                            {% empty %}
+                            <li class="list-group-item text-muted small font-italic pl-3">该组无主机</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted p-4">暂无主机分组，请先在 CMDB 添加。</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer bg-white">
+                已选中: <span id="selectedCount" class="text-success font-weight-bold" style="font-size: 1.2rem;">0</span> 台主机
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card card-success card-outline" style="height: 600px;">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-sliders-h mr-1"></i> 2. 执行配置: {{ script.name }}</h3>
+            </div>
+            <div class="card-body" style="overflow-y: auto;">
+                <form id="execForm">
+                    <h5 class="text-secondary border-bottom pb-2 mb-4">
+                        <i class="fas fa-terminal mr-1"></i> 脚本变量参数
+                    </h5>
+
+                    {% if variables %}
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i> 系统检测到脚本中包含以下变量，请在执行前赋值。
+                        </div>
+                        <div class="row">
+                        {% for var in variables %}
+                            <div class="col-md-6 form-group">
+                                <label class="text-primary font-weight-bold">{{ var }}</label>
+                                <div class="input-group">
+                                    <div class="input-group-prepend">
+                                        <span class="input-group-text"><i class="fas fa-keyboard"></i></span>
+                                    </div>
+                                    <input type="text" class="form-control script-var" name="{{ var }}" placeholder="请输入 {{ var }} 的值" required>
+                                </div>
+                            </div>
+                        {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-light border text-center p-4 text-muted">
+                            <i class="fas fa-check-circle text-success mb-2" style="font-size: 20px;"></i><br>
+                            此脚本无需输入变量<br>
+                            <small>(如果在脚本中使用 &#123;&#123; var &#125;&#125; 格式，此处会自动生成输入框)</small>
+                        </div>
+                    {% endif %}
+
+                    <h5 class="text-secondary border-bottom pb-2 mb-4 mt-5">
+                        <i class="fas fa-cogs mr-1"></i> 运行控制策略
+                    </h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>并发数 (Concurrency)</label>
+                                <input type="range" class="custom-range" id="concurrencyRange" min="1" max="50" value="5" oninput="$('#concurrencyVal').text(this.value)">
+                                <div class="d-flex justify-content-between text-muted small">
+                                    <span>1 (串行)</span>
+                                    <span class="font-weight-bold text-primary" style="font-size: 14px;">当前: <span id="concurrencyVal">5</span></span>
+                                    <span>50 (极速)</span>
+                                </div>
+                                <small class="form-text text-muted">限制同时连接的主机数量，防止网络拥塞。</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label>单机超时时间</label>
+                                <div class="input-group">
+                                    <input type="number" class="form-control" id="timeout" value="60" min="10" max="3600">
+                                    <div class="input-group-append"><span class="input-group-text">秒</span></div>
+                                </div>
+                                <small class="form-text text-muted">如果脚本执行超过此时间将被强制终止。</small>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <div class="card-footer text-right bg-white border-top">
+                <a href="{% url 'script_list' %}" class="btn btn-default mr-2">取消</a>
+                <button class="btn btn-primary btn-lg px-5 shadow-sm" onclick="submitTask()">
+                    <i class="fas fa-rocket mr-2"></i> 立即执行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- 1. 全选/反选逻辑 ---
+    $('#checkAll').change(function() {
+        const isChecked = $(this).prop('checked');
+        $('.server-chk').prop('checked', isChecked);
+        updateCount();
+    });
+
+    // 单个点击时更新计数
+    $(document).on('change', '.server-chk', function() {
+        updateCount();
+        // 如果有一个没选，全选框取消选中
+        if($('.server-chk:checked').length < $('.server-chk').length) {
+            $('#checkAll').prop('checked', false);
+        }
+    });
+
+    function updateCount() {
+        const count = $('.server-chk:checked').length;
+        $('#selectedCount').text(count);
+    }
+
+    // --- 2. 提交任务 ---
+    function submitTask() {
+        // A. 获取选中主机
+        const serverIds = [];
+        $('.server-chk:checked').each(function() {
+            serverIds.push($(this).val());
+        });
+
+        if(serverIds.length === 0) {
+            alert("⚠️ 请至少选择一台目标主机！");
+            return;
+        }
+
+        // B. 获取变量值
+        const params = {};
+        let missingVar = false;
+        $('.script-var').each(function() {
+            const val = $(this).val().trim();
+            const name = $(this).attr('name');
+            if(!val) {
+                missingVar = true;
+                $(this).addClass('is-invalid'); // 标红提示
+            } else {
+                $(this).removeClass('is-invalid');
+                params[name] = val;
+            }
+        });
+
+        if(missingVar) {
+            alert("⚠️ 请填写所有必需的脚本变量！");
+            return;
+        }
+
+        // C. 二次确认
+        if(!confirm(`🚀 准备就绪！\n\n- 目标主机: ${serverIds.length} 台\n- 脚本名称: {{ script.name }}\n\n确定要开始执行吗？`)) {
+            return;
+        }
+
+        // D. 发送请求
+        const btn = event.target;
+        const originalText = $(btn).html();
+        $(btn).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 提交中...');
+
+        $.post("{% url 'task_submit' %}", JSON.stringify({
+            script_id: "{{ script.id }}",
+            server_ids: serverIds,
+            params: params,
+            concurrency: $('#concurrencyRange').val(),
+            timeout: $('#timeout').val() // [新增] 发送超时时间
+        }), function(res) {
+            if(res.status) {
+                // 跳转到结果详情页
+                window.location.href = "/script/task/detail/" + res.task_id + "/";
+            } else {
+                alert("提交失败: " + res.msg);
+                $(btn).prop('disabled', false).html(originalText);
+            }
+        }).fail(function() {
+            alert("网络请求失败，请检查服务器日志。");
+            $(btn).prop('disabled', false).html(originalText);
+        });
+    }
+</script>
+{% endblock %}

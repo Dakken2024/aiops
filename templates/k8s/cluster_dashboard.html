@@ -1,0 +1,248 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<style>
+    .dashboard-card { background: #fff; border-radius: 8px; padding: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); height: 100%; }
+    .stat-title { font-size: 12px; color: #999; text-transform: uppercase; letter-spacing: 1px; }
+    .stat-value { font-size: 28px; font-weight: 700; color: #333; margin: 5px 0; }
+    .stat-desc { font-size: 12px; }
+    .text-success-custom { color: #52c41a; }
+    .text-danger-custom { color: #ff4d4f; }
+    .component-box { display: flex; align-items: center; margin-bottom: 12px; }
+    .comp-dot { width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; }
+    .bg-healthy { background-color: #52c41a; box-shadow: 0 0 5px #52c41a; }
+    .bg-unhealthy { background-color: #ff4d4f; box-shadow: 0 0 5px #ff4d4f; }
+    .bg-unknown { background-color: #faad14; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="m-0 font-weight-bold text-dark">
+        <i class="fas fa-chart-line text-primary mr-2"></i>Cluster Overview
+    </h4>
+    <div class="form-inline">
+        <select class="form-control mr-2 shadow-sm" onchange="location.href='?cluster_id='+this.value">
+            {% for c in clusters %}
+            <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+            {% endfor %}
+        </select>
+        <button class="btn btn-primary shadow-sm" onclick="diagnoseCluster()">
+            <i class="fas fa-magic mr-1"></i> AI 巡检
+        </button>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card border-left-primary">
+            <div class="stat-title">Nodes Status</div>
+            <div class="stat-value">{{ node_stats.total }}</div>
+            <div class="stat-desc">
+                <span class="text-success-custom"><i class="fas fa-check"></i> {{ node_stats.ready }} Ready</span>
+                <span class="text-danger-custom ml-2"><i class="fas fa-times"></i> {{ node_stats.not_ready }} Error</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card border-left-success">
+            <div class="stat-title">Total Pods</div>
+            <div class="stat-value">{{ total_pods }}</div>
+            <div class="stat-desc text-muted">Across all namespaces</div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card border-left-info">
+            <div class="stat-title">Deployments</div>
+            <div class="stat-value">{{ deploy_stats.total }}</div>
+            <div class="stat-desc">
+                <span class="text-success-custom">{{ deploy_stats.ready }} Healthy</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="dashboard-card border-left-warning">
+            <div class="stat-title">StatefulSets</div>
+            <div class="stat-value">{{ sts_stats.total }}</div>
+            <div class="stat-desc">
+                <span class="text-success-custom">{{ sts_stats.ready }} Healthy</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="stat-title mb-3">Cluster Resource Usage (Avg)</div>
+            <div id="gauge-chart" style="width: 100%; height: 250px;"></div>
+            <div class="text-center small text-muted mt-2">
+                数据来源: Ops Agent 实测
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="stat-title mb-3">Pod Status Distribution</div>
+            <div id="pod-pie-chart" style="width: 100%; height: 250px;"></div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="dashboard-card">
+            <div class="stat-title mb-3">Control Plane Health</div>
+            <div class="pt-2">
+                {% for name, status in components.items %}
+                <div class="component-box">
+                    <div class="comp-dot bg-{{ status|lower }}"></div>
+                    <div class="d-flex justify-content-between w-100">
+                        <span class="text-dark font-weight-bold">{{ name }}</span>
+                        <span class="badge {% if status == 'Healthy' %}badge-success{% else %}badge-danger{% endif %}">
+                            {{ status }}
+                        </span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white border-0">
+                <h5 class="m-0 font-weight-bold text-danger"><i class="fas fa-exclamation-triangle mr-2"></i>Recent Warnings</h5>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>Time</th>
+                            <th>Namespace</th>
+                            <th>Kind / Name</th>
+                            <th>Reason</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for w in warnings %}
+                        <tr>
+                            <td class="text-nowrap text-muted">{{ w.last_timestamp|default:w.event_time|date:"H:i:s" }}</td>
+                            <td>{{ w.involved_object.namespace }}</td>
+                            <td>
+                                <b>{{ w.involved_object.kind }}</b><br>
+                                <span class="small text-muted">{{ w.involved_object.name }}</span>
+                            </td>
+                            <td><span class="badge badge-warning">{{ w.reason }}</span></td>
+                            <td class="small">{{ w.message }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="text-center py-4 text-muted">🎉 集群运行平稳，暂无告警</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="clusterModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary">
+                <h5 class="modal-title text-white">AI 集群全景诊断</h5>
+                <button class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <select id="modelSelect" class="form-control mb-3">
+                    {% for m in ai_models %}<option value="{{ m.id }}">{{ m.name }}</option>{% endfor %}
+                </select>
+                <div id="loading" class="text-center py-4" style="display:none;"><div class="spinner-border text-primary"></div><p>正在分析集群状态...</p></div>
+                <div id="content" class="markdown-body" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // === ECharts 初始化 ===
+
+    // 1. 资源仪表盘
+    var gaugeChart = echarts.init(document.getElementById('gauge-chart'));
+    gaugeChart.setOption({
+        tooltip: { formatter: '{b} : {c}%' },
+        series: [{
+            type: 'gauge',
+            startAngle: 180, endAngle: 0,
+            min: 0, max: 100,
+            splitNumber: 5,
+            itemStyle: { color: '#58D9F9' },
+            progress: { show: true, width: 30 },
+            pointer: { show: false },
+            axisLine: { lineStyle: { width: 30 } },
+            axisTick: { show: false },
+            splitLine: { show: false },
+            axisLabel: { show: false },
+            detail: { valueAnimation: true, offsetCenter: [0, -20], fontSize: 30, formatter: '{value}%', color: '#333' },
+            title: { offsetCenter: [0, 20], fontSize: 14, color: '#999' },
+            data: [
+                { value: {{ usage.cpu }}, name: 'CPU', title: {offsetCenter: ['-60%', '30%']}, detail: {offsetCenter: ['-60%', '-20%']} },
+                { value: {{ usage.mem }}, name: 'MEM', title: {offsetCenter: ['60%', '30%']}, detail: {offsetCenter: ['60%', '-20%']} }
+            ]
+        }]
+    });
+
+    // 2. Pod 状态饼图
+    var pieChart = echarts.init(document.getElementById('pod-pie-chart'));
+    pieChart.setOption({
+        tooltip: { trigger: 'item' },
+        legend: { bottom: '0%', left: 'center' },
+        color: ['#52c41a', '#faad14', '#ff4d4f', '#1890ff', '#d9d9d9'], // Running, Pending, Failed, etc.
+        series: [{
+            name: 'Pod Status',
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+            label: { show: false },
+            emphasis: { label: { show: true, fontSize: '16', fontWeight: 'bold' } },
+            data: [
+                { value: {{ pod_stats.Running|default:0 }}, name: 'Running' },
+                { value: {{ pod_stats.Pending|default:0 }}, name: 'Pending' },
+                { value: {{ pod_stats.Failed|default:0 }}, name: 'Failed' },
+                { value: {{ pod_stats.Succeeded|default:0 }}, name: 'Succeeded' },
+                { value: {{ pod_stats.Unknown|default:0 }}, name: 'Unknown' }
+            ]
+        }]
+    });
+
+    window.addEventListener('resize', function() {
+        gaugeChart.resize();
+        pieChart.resize();
+    });
+
+    // AI 诊断逻辑 (复用)
+    function diagnoseCluster() {
+        $('#clusterModal').modal('show'); $('#content').hide(); $('#loading').show();
+        $.ajax({
+            url: '{% url "k8s_cluster_diagnose" %}', type: 'POST',
+            data: { cluster_id: "{{ current_cluster.id }}", model_id: $('#modelSelect').val() },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(res) {
+                $('#loading').hide();
+                $('#content').html(res.status ? marked.parse(res.analysis) : res.msg).show();
+            }
+        });
+    }
+</script>
+{% endblock %}

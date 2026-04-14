@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.12/ace.js"></script>
+
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <a href="javascript:history.back()" class="text-muted mr-2"><i class="fas fa-arrow-left"></i></a>
+                    {{ workload.kind }}: <span class="text-primary">{{ workload.name }}</span>
+                    <small class="text-muted ml-2">({{ workload.namespace }})</small>
+                </h4>
+                
+                <div>
+                    <button class="btn btn-warning shadow-sm mr-2" onclick="restartWorkload()">
+                        <i class="fas fa-redo"></i> 重新部署
+                    </button>
+                    <button class="btn btn-success shadow-sm" onclick="saveYaml()">
+                        <i class="fas fa-save"></i> 保存配置
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<div class="card card-primary card-outline card-outline-tabs">
+    <div class="card-header p-0 border-bottom-0">
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item">
+                <a class="nav-link active" data-toggle="pill" href="#tab-pods" role="tab">
+                    <i class="fas fa-cubes mr-1"></i> 关联 Pods ({{ pods|length }})
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="pill" href="#tab-describe" role="tab" onclick="loadDescribe()">
+                    <i class="fas fa-info-circle mr-1"></i> Describe (详情/事件)
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" data-toggle="pill" href="#tab-yaml" role="tab">
+                    <i class="fas fa-code mr-1"></i> YAML 配置
+                </a>
+            </li>
+        </ul>
+    </div>
+    <div class="card-body">
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="tab-pods">
+                <div class="table-responsive">
+                    <table class="table table-hover text-nowrap">
+                        <thead>
+                            <tr>
+                                <th>Pod Name</th>
+                                <th>Status</th>
+                                <th>IP / Node</th>
+                                <th>Restarts</th>
+                                <th>Age</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in pods %}
+                            <tr>
+                                <td>{{ p.name }}</td>
+                                <td>
+                                    <span class="badge {% if p.status == 'Running' %}badge-success{% elif p.status == 'Pending' %}badge-warning{% else %}badge-danger{% endif %}">
+                                        {{ p.status }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div>{{ p.ip }}</div>
+                                    <small class="text-muted">{{ p.node }}</small>
+                                </td>
+                                <td>{{ p.restarts }}</td>
+                                <td>{{ p.age|date:"Y-m-d H:i" }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <button class="btn btn-xs btn-info" onclick="showPodLog('{{ p.name }}', '{{ p.namespace }}')">
+                                            <i class="fas fa-file-alt"></i> 日志
+                                        </button>
+                                        <a href="{% url 'k8s_pod_terminal' p.name %}?namespace={{ p.namespace }}&cluster_id={{ current_cluster.id }}"
+                                           target="_blank" class="btn btn-xs btn-dark">
+                                            <i class="fas fa-terminal"></i> 终端
+                                        </a>
+                                        <button class="btn btn-xs btn-primary" onclick="describePod('{{ p.name }}', '{{ p.namespace }}')">
+                                            <i class="fas fa-info-circle"></i> Desc
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center py-4 text-muted">暂无关联 Pod</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab-describe">
+                <div id="describeLoading" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2 text-muted">正在加载 Events 和 Status...</p>
+                </div>
+                <pre id="describeContent" class="p-3 rounded"
+                     style="display:none;
+                            background-color: #1e1e1e;
+                            color: #d4d4d4;
+                            font-family: Consolas, monospace;
+                            font-size: 13px;
+                            white-space: pre-wrap;
+                            max-height: 650px;
+                            overflow: auto;
+                            border: 1px solid #444;"></pre>
+            </div>
+
+            <div class="tab-pane fade" id="tab-yaml">
+                <div id="yamlEditor" style="height: 650px; width: 100%;">{{ workload.yaml }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="logModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Pod 日志</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body bg-dark">
+                <pre id="logContent" class="text-white small" style="height: 600px; overflow: auto;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="podDescribeModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Pod Describe: <span id="podDescribeTitle"></span></h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body bg-dark">
+                <pre id="podDescribeContent" class="text-white small" style="height: 600px; overflow: auto; font-family: Consolas, monospace;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 初始化 Ace Editor
+    var editor = ace.edit("yamlEditor");
+    editor.setTheme("ace/theme/chrome");
+    editor.session.setMode("ace/mode/yaml");
+    editor.setFontSize(14);
+
+    const clusterId = "{{ current_cluster.id }}";
+    const kind = "{{ workload.kind }}";
+    const name = "{{ workload.name }}";
+    const namespace = "{{ workload.namespace }}";
+
+    // CSRF Helper
+    function getCookie(name) {
+        let v = null;
+        if (document.cookie && document.cookie !== '') {
+            document.cookie.split(';').forEach(c => {
+                c = c.trim();
+                if (c.substring(0, name.length + 1) === (name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+            });
+        }
+        return v;
+    }
+    const csrftoken = getCookie('csrftoken') || "{{ csrf_token }}";
+
+    // 1. 加载 Workload Describe 信息
+    let describeLoaded = false;
+    function loadDescribe() {
+        if (describeLoaded) return;
+
+        $('#describeLoading').show();
+        $('#describeContent').hide();
+
+        $.ajax({
+            url: '{% url "k8s_workload_describe" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({
+                cluster_id: clusterId,
+                kind: kind,
+                name: name,
+                namespace: namespace
+            }),
+            success: function(res) {
+                $('#describeLoading').hide();
+                if (res.status) {
+                    $('#describeContent').text(res.describe).show();
+                    describeLoaded = true;
+                } else {
+                    $('#describeContent').html('<span class="text-danger">加载失败: ' + res.msg + '</span>').show();
+                }
+            },
+            error: function() {
+                $('#describeLoading').hide();
+                $('#describeContent').html('<span class="text-danger">网络请求失败</span>').show();
+            }
+        });
+    }
+
+    // 2. 加载 Pod Describe 信息 (模态框)
+    function describePod(podName, podNs) {
+        $('#podDescribeModal').modal('show');
+        $('#podDescribeTitle').text(podName);
+        $('#podDescribeContent').text('Loading...');
+
+        $.ajax({
+            url: '{% url "k8s_workload_describe" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({
+                cluster_id: clusterId,
+                kind: 'Pod',
+                name: podName,
+                namespace: podNs
+            }),
+            success: function(res) {
+                if(res.status) {
+                    $('#podDescribeContent').text(res.describe);
+                } else {
+                    $('#podDescribeContent').text("Error: " + res.msg);
+                }
+            },
+            error: function() { $('#podDescribeContent').text("Network Error"); }
+        });
+    }
+
+    // 保存 YAML
+    function saveYaml() {
+        if(!confirm("确定要应用 YAML 修改吗？")) return;
+        $.ajax({
+            url: '{% url "k8s_workload_update_yaml" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({
+                cluster_id: clusterId, kind: kind, name: name, namespace: namespace,
+                yaml: editor.getValue()
+            }),
+            success: function(res) {
+                if(res.status) { alert(res.msg); location.reload(); } else { alert(res.msg); }
+            }
+        });
+    }
+
+    // 重启
+    function restartWorkload() {
+        if(!confirm("确定要滚动重启吗？")) return;
+        $.ajax({
+            url: '{% url "k8s_workload_restart" %}',
+            type: 'POST',
+            contentType: 'application/json',
+            headers: {'X-CSRFToken': csrftoken},
+            data: JSON.stringify({cluster_id: clusterId, kind: kind, name: name, namespace: namespace}),
+            success: function(res) {
+                if(res.status) alert(res.msg); else alert(res.msg);
+            }
+        });
+    }
+
+    // 日志
+    function showPodLog(podName, ns) {
+        $('#logModal').modal('show');
+        $('#logContent').text('Loading...');
+        $.get("{% url 'k8s_pod_log' %}", {cluster_id: clusterId, name: podName, namespace: ns}, function(res) {
+            $('#logContent').text(res.status ? res.log : res.log);
+            const el = document.getElementById('logContent');
+            el.scrollTop = el.scrollHeight;
+        });
+    }
+</script>
+{% endblock %}

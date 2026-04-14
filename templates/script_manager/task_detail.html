@@ -1,0 +1,244 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-3 col-sm-6 col-12">
+        <div class="info-box shadow-sm">
+            <span class="info-box-icon bg-info"><i class="fas fa-server"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">总目标</span>
+                <span class="info-box-number" id="numTotal">{{ task.total_count }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 col-12">
+        <div class="info-box shadow-sm">
+            <span class="info-box-icon bg-success"><i class="fas fa-check"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">成功</span>
+                <span class="info-box-number" id="numSuccess">{{ task.success_count }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 col-12">
+        <div class="info-box shadow-sm">
+            <span class="info-box-icon bg-danger"><i class="fas fa-times"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">失败</span>
+                <span class="info-box-number" id="numFailed">{{ task.failed_count }}</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6 col-12">
+        <div class="info-box shadow-sm">
+            <span class="info-box-icon bg-warning"><i class="fas fa-clock"></i></span>
+            <div class="info-box-content">
+                <span class="info-box-text">状态</span>
+                <span class="info-box-number">
+                    {% if task.is_finished %}
+                        <span class="text-success">Finished</span>
+                    {% else %}
+                        <span id="wsConnectionStatus" class="text-primary">Running (Connecting...)</span>
+                    {% endif %}
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-primary card-outline">
+    <div class="card-header">
+        <h3 class="card-title">执行审计 (Task #{{ task.id }})</h3>
+        <div class="card-tools">
+             <span id="wsStatusBadge" class="badge badge-secondary mr-2" title="WebSocket Status">Disconnected</span>
+        </div>
+    </div>
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover table-striped">
+            <thead>
+                <tr>
+                    <th>主机名</th>
+                    <th>IP地址</th>
+                    <th>实时状态</th>
+                    <th>返回码</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="logTableBody">
+                {% for log in initial_logs %}
+                <tr id="server-row-{{ log.server.id }}" data-log-id="{{ log.id }}">
+                    <td>{{ log.server.hostname }}</td>
+                    <td>{{ log.server.ip_address }}</td>
+                    <td class="status-cell">
+                        {% if log.status == 'Success' %}
+                            <span class="badge badge-success">Success</span>
+                        {% elif log.status == 'Failed' %}
+                            <span class="badge badge-danger">Failed</span>
+                        {% elif log.status == 'Running' %}
+                            <span class="badge badge-primary"><i class="fas fa-spinner fa-spin"></i> Running</span>
+                        {% else %}
+                            <span class="badge badge-secondary">{{ log.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="exit-code-cell">{{ log.exit_code|default_if_none:"-" }}</td>
+                    <td>
+                        <button class="btn btn-xs btn-info" onclick="viewLog({{ log.id }}, {{ log.server.id }}, '{{ log.server.hostname }}')">
+                            <i class="fas fa-terminal"></i> 实时终端
+                        </button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-4">
+                        没有生成任何执行记录 (请检查是否选择了主机)
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="logModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-terminal mr-2"></i>
+                    终端审计: <span id="currentServerName" class="text-warning"></span>
+                </h5>
+                <button class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body bg-dark p-0">
+                <pre id="logContent" class="p-3 m-0 text-light" style="height: 600px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace; font-size: 13px; white-space: pre-wrap; line-height: 1.4;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const taskId = "{{ task.id }}";
+    // 自动判断 WebSocket 协议 (ws 或 wss)
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const wsUrl = wsScheme + '://' + window.location.host + '/ws/task/log/' + taskId + '/';
+
+    let socket = null;
+    let currentViewingServerId = null; // 标记当前正在查看哪台机器的日志
+
+    $(document).ready(function() {
+        // 页面加载后立即连接 WebSocket
+        initWebSocket();
+    });
+
+    function initWebSocket() {
+        console.log("Connecting to WebSocket:", wsUrl);
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = function() {
+            console.log("WS Connected");
+            $('#wsStatusBadge').removeClass('badge-secondary badge-danger').addClass('badge-success').text('Realtime Connected');
+            $('#wsConnectionStatus').text("Running (Realtime)");
+        };
+
+        socket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            handleUpdate(data);
+        };
+
+        socket.onclose = function() {
+            console.log("WS Disconnected");
+            $('#wsStatusBadge').removeClass('badge-success').addClass('badge-secondary').text('Disconnected');
+        };
+
+        socket.onerror = function(err) {
+            console.error("WS Error:", err);
+            $('#wsStatusBadge').removeClass('badge-success').addClass('badge-danger').text('Connection Error');
+        };
+    }
+
+    // 处理后端推送的消息
+    function handleUpdate(data) {
+        // data 结构: { server_id: 1, status: 'Running', log: '...', exit_code: 0 }
+
+        // 1. 定位表格行
+        const row = $('#server-row-' + data.server_id);
+        if (row.length === 0) return;
+
+        // 2. 更新状态徽章 (Badge)
+        if (data.status) {
+            let badgeHtml = '';
+            if(data.status === 'Success') {
+                badgeHtml = '<span class="badge badge-success">Success</span>';
+                updateCounts(); // 简单触发统计更新(可选)
+            } else if(data.status === 'Failed' || data.status === 'Timeout') {
+                badgeHtml = '<span class="badge badge-danger">' + data.status + '</span>';
+                updateCounts();
+            } else if(data.status === 'Running') {
+                badgeHtml = '<span class="badge badge-primary"><i class="fas fa-spinner fa-spin mr-1"></i> Running</span>';
+            }
+
+            row.find('.status-cell').html(badgeHtml);
+        }
+
+        // 3. 更新退出码
+        if (data.exit_code !== null && data.exit_code !== undefined) {
+            row.find('.exit-code-cell').text(data.exit_code);
+        }
+
+        // 4. [关键] 如果模态框打开且正在看这台机器，实时追加日志
+        if (currentViewingServerId === data.server_id && data.log) {
+            const terminal = document.getElementById('logContent');
+            // 创建文本节点插入，防止 HTML 注入，同时保留换行格式
+            // 也可以直接 terminal.innerHTML += data.log，取决于你是否信任日志内容
+            terminal.appendChild(document.createTextNode(data.log));
+
+            // 自动滚动到底部
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+    }
+
+    // 点击“实时终端”按钮
+    function viewLog(logId, serverId, hostname) {
+        $('#logModal').modal('show');
+        $('#logContent').text('Loading history logs...\n'); // 先清空并显示加载中
+        $('#currentServerName').text(hostname);
+
+        currentViewingServerId = serverId; // 标记当前关注的 Server ID
+
+        // 调用 API 获取已产生的历史日志 (防止 WS 连接前产生的日志丢失)
+        $.post("{% url 'task_log_content' %}", {
+            log_id: logId,
+            csrfmiddlewaretoken: '{{ csrf_token }}'
+        }, function(res) {
+            if(res.status) {
+                let history = "";
+                if (res.stdout) history += res.stdout;
+                // 兼容旧数据或部分 stderr
+                if (res.stderr) history += "\n[STDERR]\n" + res.stderr;
+
+                $('#logContent').text(history);
+
+                // 滚动到底部，准备接收新的 WebSocket 日志
+                const terminal = document.getElementById('logContent');
+                terminal.scrollTop = terminal.scrollHeight;
+            } else {
+                $('#logContent').text("获取历史日志失败: " + res.msg);
+            }
+        });
+    }
+
+    // 模态框关闭时，清除标记
+    $('#logModal').on('hidden.bs.modal', function () {
+        currentViewingServerId = null;
+    });
+
+    // 简单的统计数字更新逻辑 (实际可不做，或者也通过 WS 推送统计)
+    function updateCounts() {
+        let success = $('.badge-success').length;
+        let failed = $('.badge-danger').length;
+        // 注意：这里只是前端简单的 DOM 统计，为了精确性，后端其实也可以推送 summary 信息
+        $('#numSuccess').text(success);
+        $('#numFailed').text(failed);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-code text-primary mr-2"></i>脚本库管理 (Script Library)
+                </h3>
+                <div class="card-tools">
+                    <a href="{% url 'script_create' %}" class="btn btn-success btn-sm">
+                        <i class="fas fa-plus"></i> 新建脚本
+                    </a>
+                </div>
+            </div>
+
+            <div class="card-body p-0 table-responsive">
+                <table class="table table-hover text-nowrap table-striped">
+                    <thead>
+                        <tr>
+                            <th>脚本名称</th>
+                            <th>类型</th>
+                            <th>最后修改时间</th>
+                            <th>创建人</th>
+                            <th style="width: 250px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in scripts %}
+                        <tr>
+                            <td class="font-weight-bold">
+                                <a href="{% url 'script_edit' s.id %}" class="text-dark">
+                                    <i class="far fa-file-code mr-1 text-muted"></i> {{ s.name }}
+                                </a>
+                            </td>
+                            <td>
+                                {% if s.script_type == 'sh' %}
+                                    <span class="badge badge-secondary" style="width: 60px;">Shell</span>
+                                {% elif s.script_type == 'py' %}
+                                    <span class="badge badge-info" style="width: 60px;">Python</span>
+                                {% else %}
+                                    <span class="badge badge-warning" style="width: 60px;">Ansible</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small">
+                                {{ s.updated_at|date:"Y-m-d H:i" }}
+                            </td>
+                            <td>
+                                <span class="badge badge-light border">{{ s.created_by }}</span>
+                            </td>
+                            <td>
+                                <a href="{% url 'task_create' s.id %}" class="btn btn-xs btn-success" title="批量执行">
+                                    <i class="fas fa-play"></i> 执行
+                                </a>
+
+                                <a href="{% url 'script_edit' s.id %}" class="btn btn-xs btn-primary ml-1" title="编辑代码">
+                                    <i class="fas fa-edit"></i> 编辑
+                                </a>
+
+                                <button class="btn btn-xs btn-danger ml-1" onclick="deleteScript({{ s.id }})" title="删除脚本">
+                                    <i class="fas fa-trash"></i> 删除
+                                </button>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="fas fa-box-open fa-3x mb-3"></i><br>
+                                暂无脚本，请点击右上角新建。
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 删除脚本逻辑
+    function deleteScript(id) {
+        if(!confirm("⚠️ 确定要删除该脚本吗？\n删除后历史版本也将一并清空，且无法恢复！")) return;
+
+        // 简单的 Loading 效果
+        const btn = event.target;
+        const originalHtml = $(btn).html();
+        $(btn).prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i>');
+
+        $.post("{% url 'script_api' %}", {
+            action: 'delete',
+            script_id: id,
+            csrfmiddlewaretoken: '{{ csrf_token }}'
+        }, function(res){
+            if(res.status) {
+                // 成功后刷新页面
+                location.reload();
+            } else {
+                alert("删除失败: " + res.msg);
+                $(btn).prop('disabled', false).html(originalHtml);
+            }
+        }).fail(function() {
+            alert("网络请求失败");
+            $(btn).prop('disabled', false).html(originalHtml);
+        });
+    }
+</script>
+{% endblock %}

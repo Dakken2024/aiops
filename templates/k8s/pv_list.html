@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-database text-primary mr-2"></i>持久卷 (PV)
+                </h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2 shadow-sm" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}
+                        <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <a href="{% url 'k8s_resource_create' %}?cluster_id={{ current_cluster.id }}" class="btn btn-success shadow-sm">
+                        <i class="fas fa-plus"></i> YAML 创建
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card card-primary card-outline">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Capacity</th>
+                    <th>Source</th>
+                    <th>SC</th>
+                    <th>Claim</th>
+                    <th>Reclaim</th>
+                    <th>Age</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in pvs %}
+                <tr>
+                    <td class="font-weight-bold">{{ item.name }}</td>
+                    <td>
+                        <span class="badge {% if item.status == 'Bound' %}badge-success{% elif item.status == 'Available' %}badge-info{% else %}badge-warning{% endif %}">
+                            {{ item.status }}
+                        </span>
+                    </td>
+                    <td>{{ item.capacity }}</td>
+                    <td>
+                        <span class="badge badge-light border">{{ item.source_type }}</span>
+                        <div class="small text-muted mt-1">{{ item.source_detail|truncatechars:20 }}</div>
+                    </td>
+                    <td>{{ item.storage_class|default:"-" }}</td>
+                    <td>
+                        {% if item.claim != "-" %}
+                            <span class="text-dark small">{{ item.claim }}</span>
+                        {% else %}
+                            <span class="text-muted small">-</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ item.reclaim_policy }}</td>
+                    <td>{{ item.age|date:"Y-m-d" }}</td>
+                    <td>
+                        <button class="btn btn-xs btn-info" onclick="editYaml('pv', '{{ item.name }}', '')">YAML</button>
+                        <button class="btn btn-xs btn-danger" onclick="deleteResource('pv', '{{ item.name }}', '')">删除</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="9" class="text-center text-muted py-4">暂无 PV 数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% include 'k8s/inc_storage_common.html' %}
+{% endblock %}
+
+{% block extra_js %}
+{% include 'k8s/inc_storage_js.html' %}
+{% endblock %}

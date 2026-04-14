@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="card card-danger card-outline">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-shield-alt mr-1"></i> 高危操作拦截记录
+        </h3>
+    </div>
+    
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap table-striped">
+            <thead>
+                <tr>
+                    <th>时间</th>
+                    <th>操作人</th>
+                    <th>服务器</th>
+                    <th>拦截命令</th>
+                    <th>风险等级</th>
+                    <th>最终动作</th>
+                    <th>AI 建议</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td class="text-muted text-sm">{{ log.created_at|date:"Y-m-d H:i:s" }}</td>
+                    <td>
+                        <span class="badge badge-light">{{ log.user.username }}</span>
+                    </td>
+                    <td>
+                        {{ log.server.hostname }} <br>
+                        <small class="text-muted">{{ log.server.ip_address }}</small>
+                    </td>
+                    <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis;">
+                        <code style="color: #d63384;">{{ log.command }}</code>
+                    </td>
+                    <td>
+                        <span class="badge badge-danger">{{ log.risk_level }}</span>
+                    </td>
+                    <td>
+                        {% if log.action == 'executed' %}
+                            <span class="badge badge-warning">⚠️ 强制执行</span>
+                        {% else %}
+                            <span class="badge badge-success">🛡️ 已拦截</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if log.ai_advice %}
+                        <button class="btn btn-xs btn-outline-info" onclick="showAdvice('{{ log.id }}')">
+                            <i class="fas fa-robot"></i> 查看详情
+                        </button>
+                        <div id="advice-{{ log.id }}" style="display:none;">{{ log.ai_advice }}</div>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="text-center py-5 text-muted">暂无高危操作记录</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info">
+                <h5 class="modal-title text-white">AI 评估详情</h5>
+                <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border">
+                    <pre id="modalContent" style="white-space: pre-wrap; font-family: inherit; margin: 0;"></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showAdvice(id) {
+        var content = document.getElementById('advice-' + id).innerText;
+        document.getElementById('modalContent').innerText = content;
+        $('#detailModal').modal('show');
+    }
+</script>
+{% endblock %}

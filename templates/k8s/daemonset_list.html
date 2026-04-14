@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card shadow-none border-0 bg-transparent">
+            <div class="card-body p-0 d-flex justify-content-between align-items-center">
+                <h4 class="m-0 text-dark">
+                    <i class="fas fa-ghost text-primary mr-2"></i>守护进程集 (DaemonSets)
+                </h4>
+                <div class="form-inline">
+                    <select class="form-control mr-2" onchange="location.href='?cluster_id='+this.value">
+                        {% for c in clusters %}
+                        <option value="{{ c.id }}" {% if current_cluster.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <select class="form-control" onchange="changeNamespace(this.value)">
+                        <option value="">-- All Namespaces --</option>
+                        {% for ns in namespaces %}
+                        <option value="{{ ns }}" {% if current_namespace == ns %}selected{% endif %}>{{ ns }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+<div class="card">
+    <div class="card-body p-0 table-responsive">
+        <table class="table table-hover text-nowrap">
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Name</th>
+                    <th>Desired</th>
+                    <th>Current</th>
+                    <th>Ready</th>
+                    <th>Age</th>
+                    <th>操作</th> </tr>
+            </thead>
+            <tbody>
+                {% for d in daemonsets %}
+                <tr>
+                    <td><span class="badge badge-light border">{{ d.namespace }}</span></td>
+                    <td><b>{{ d.name }}</b></td>
+                    <td>{{ d.desired }}</td>
+                    <td>{{ d.current|default:d.ready }}</td>
+                    <td class="text-success">{{ d.ready }}</td>
+                    <td>{{ d.age|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        <a href="{% url 'k8s_workload_detail' %}?kind=DaemonSet&name={{ d.name }}&namespace={{ d.namespace }}&cluster_id={{ current_cluster.id }}"
+                           class="btn btn-xs btn-info">
+                            <i class="fas fa-eye"></i> 详情
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted">暂无数据</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function changeNamespace(ns) {
+        const urlParams = new URLSearchParams(window.location.search);
+        urlParams.set('namespace', ns);
+        window.location.search = urlParams.toString();
+    }
+</script>
+{% endblock %}

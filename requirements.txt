@@ -1,0 +1,30 @@
+aliyun_python_sdk_core==2.13.36
+aliyun_python_sdk_ecs==4.24.82
+apscheduler==3.11.1
+asgiref==3.11.0
+celery==5.6.0
+channels==3.0.4
+Django
+django_fernet_fields_v2==0.9
+kubernetes==34.1.0
+openai==2.9.0
+cryptography
+paramiko
+psutil==7.1.3
+PyYAML==6.0.3
+Requests==2.32.5
+tencentcloud_sdk_python==3.1.7
+whitenoise
+openpyxl
+pyte
+redis
+eventlet
+crontab
+scikit-learn>=1.3.0
+statsmodels>=0.14.0
+numpy>=1.24.0
+python-dotenv>=1.0.0
+
+# === PostgreSQL 18 迁移依赖 (Phase: DB Migration) ===
+psycopg2-binary==2.9.9
+# pgvector==0.2.4  # Django ORM 集成 (启用AI知识库时安装)
