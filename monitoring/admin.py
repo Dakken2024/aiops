@@ -159,7 +159,7 @@ class MonitoringAdminSite(admin.AdminSite):
             pass
 
         try:
-            health_scores = HealthScore.objects.all().order_by('-collected_at')
+            health_scores = HealthScore.objects.all().order_by('-scored_at')
             if health_scores.exists():
                 avg_score = health_scores.aggregate(avg=Avg('overall_score'))['avg']
                 stats['avg_health_score'] = f"{avg_score:.0f}" if avg_score else '-'
@@ -386,7 +386,7 @@ class MonitoringAdminSite(admin.AdminSite):
             pass
 
         recent_alerts = list(AlertEvent.objects.select_related('rule', 'server').order_by('-fired_at')[:10])
-        health_overview = list(HealthScore.objects.select_related('server').order_by('-collected_at')[:8])
+        health_overview = list(HealthScore.objects.select_related('server').order_by('-scored_at')[:8])
 
         context = {
             'stats': stats,
