@@ -1,0 +1,8 @@
+Requirement already satisfied: channels-redis in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (4.3.0)
+Requirement already satisfied: redis>=4.6 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from channels-redis) (7.4.0)
+Requirement already satisfied: msgpack~=1.0 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from channels-redis) (1.1.2)
+Requirement already satisfied: asgiref<4,>=3.9.1 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from channels-redis) (3.11.0)
+Requirement already satisfied: channels>=4.2.2 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from channels-redis) (4.3.2)
+Requirement already satisfied: Django>=4.2 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from channels>=4.2.2->channels-redis) (6.0.4)
+Requirement already satisfied: sqlparse>=0.5.0 in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from Django>=4.2->channels>=4.2.2->channels-redis) (0.5.5)
+Requirement already satisfied: tzdata in C:\Users\Administrator\.conda\envs\aiops\Lib\site-packages (from Django>=4.2->channels>=4.2.2->channels-redis) (2026.1)

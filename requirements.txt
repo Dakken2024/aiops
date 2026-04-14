@@ -4,6 +4,7 @@ apscheduler==3.11.1
 asgiref==3.11.0
 celery==5.6.0
 channels==3.0.4
+channels-redis>=4.2.0
 Django
 django_fernet_fields_v2==0.9
 kubernetes==34.1.0
