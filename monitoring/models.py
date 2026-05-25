@@ -411,6 +411,8 @@ class AgentToken(models.Model):
     last_seen_at = models.DateTimeField(null=True, blank=True)
     last_ip = models.GenericIPAddressField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    allowed_ips = models.JSONField(default=list, blank=True, verbose_name='允许的IP列表')
+    hmac_secret = models.CharField(max_length=64, blank=True, verbose_name='HMAC密钥')
 
     class Meta:
         verbose_name = 'Agent Token'
@@ -549,17 +551,23 @@ class CloudResource(models.Model):
 
 
 class DataRetentionPolicy(models.Model):
+    METRIC_TYPE_CHOICES = [
+        ('raw', '原始明细'),
+        ('5min', '5分钟聚合'),
+        ('1hour', '1小时聚合'),
+        ('1day', '1天聚合'),
+    ]
     INTERVAL_CHOICES = [
         ('5m', '5分钟'), ('1h', '1小时'), ('1d', '1天'),
     ]
     name = models.CharField("策略名称", max_length=100)
-    metric_type = models.CharField("指标类型", max_length=50, default='raw',
-        help_text="raw=原始明细, aggregated=聚合数据")
+    metric_type = models.CharField("指标类型", max_length=50, choices=METRIC_TYPE_CHOICES, default='raw')
     retention_days = models.PositiveIntegerField("保留天数", default=30)
     aggregation_interval = models.CharField("聚合间隔", max_length=20, default='1h',
         choices=INTERVAL_CHOICES)
-    is_active = models.BooleanField("是否启用", default=True)
+    is_enabled = models.BooleanField("是否启用", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         verbose_name = '数据保留策略'

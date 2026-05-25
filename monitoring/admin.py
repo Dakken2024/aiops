@@ -14,7 +14,7 @@ from .models import (
     AlertRule, AlertEvent, AlertComment, AlertSilenceRule, NotificationLog, DetectorConfig,
     AnomalyHistory, AlertGroup, AlertCorrelationRule, RemediationAction,
     RemediationHistory, RunbookEntry, AgentToken, EscalationPolicy,
-    ServiceTopology, SavedDashboard, HealthScore,
+    ServiceTopology, SavedDashboard, HealthScore, DataRetentionPolicy,
 )
 
 
@@ -1237,6 +1237,21 @@ class SavedDashboardAdmin(admin.ModelAdmin):
     widgets_count.short_description = '组件数'
 
 
+@admin.register(DataRetentionPolicy, site=monitoring_admin_site)
+class DataRetentionPolicyAdmin(admin.ModelAdmin):
+    list_display = ['name', 'metric_type', 'retention_days', 'aggregation_interval', 'is_enabled', 'created_at']
+    list_filter = ['metric_type', 'is_enabled', 'aggregation_interval']
+    list_editable = ['is_enabled', 'retention_days']
+    search_fields = ['name']
+    readonly_fields = ['created_at', 'updated_at']
+
+    fieldsets = (
+        ('基本信息', {'fields': ('name', 'metric_type', 'is_enabled')}),
+        ('保留与聚合', {'fields': ('retention_days', 'aggregation_interval')}),
+        ('元数据', {'fields': ('created_at', 'updated_at'), 'classes': ('collapse',)}),
+    )
+
+
 @admin.register(HealthScore, site=monitoring_admin_site)
 class HealthScoreAdmin(ExportMixin, admin.ModelAdmin):
     list_display = ['server_link', 'overall_score_gauge', 'grade_badge',
@@ -1338,5 +1353,6 @@ for model_admin_class in [
     (ServiceTopology, ServiceTopologyAdmin),
     (SavedDashboard, SavedDashboardAdmin),
     (HealthScore, HealthScoreAdmin),
+    (DataRetentionPolicy, DataRetentionPolicyAdmin),
 ]:
     admin.site.register(model_admin_class[0], model_admin_class[1])

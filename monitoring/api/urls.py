@@ -65,7 +65,7 @@ urlpatterns = [
     path('cases/<int:pk>/feedback/', views.api_case_feedback, name='api_case_feedback'),
     path('callback/dingtalk/', callback_views.api_dingtalk_callback, name='api_dingtalk_callback'),
     path('callback/wecom/', callback_views.api_wecom_callback, name='api_wecom_callback'),
-    path('alerts/<int:pk>/correlation/', views.api_alert_correlation_detail, name='api_alert_correlation_detail'),
+    # path('alerts/<int:pk>/correlation/', views.api_alert_correlation_detail, name='api_alert_correlation_detail'),
     path('prediction/capacity/', views.api_capacity_forecast, name='api_capacity_forecast'),
     # Webhook
     path('webhooks/', views.api_webhook_endpoints, name='api_webhook_endpoints'),

@@ -152,6 +152,60 @@ class HighRiskAudit(models.Model):
         verbose_name = "高危审计"
 
 
+class CloudResource(models.Model):
+    """多云资源模型（ECS/RDS/SLB/OSS/Redis/CDN 等）"""
+    PROVIDER_CHOICES = (
+        ('aliyun', '阿里云'),
+        ('tencent', '腾讯云'),
+        ('huawei', '华为云'),
+        ('aws', 'AWS'),
+    )
+    RESOURCE_TYPE_CHOICES = (
+        ('ecs', 'ECS/CVM/云服务器'),
+        ('rds', 'RDS/云数据库'),
+        ('slb', 'SLB/负载均衡'),
+        ('oss', 'OSS/对象存储'),
+        ('redis', 'Redis/缓存'),
+        ('cdn', 'CDN'),
+    )
+
+    provider = models.CharField("云厂商", max_length=20, choices=PROVIDER_CHOICES)
+    resource_type = models.CharField("资源类型", max_length=20, choices=RESOURCE_TYPE_CHOICES)
+    instance_id = models.CharField("实例ID", max_length=100, db_index=True)
+    instance_name = models.CharField("实例名称", max_length=200, blank=True)
+    region = models.CharField("地域", max_length=50, blank=True)
+
+    cloud_account = models.ForeignKey(
+        CloudAccount,
+        on_delete=models.CASCADE,
+        verbose_name="所属云账号",
+        related_name='cloud_resources'
+    )
+    local_server = models.ForeignKey(
+        Server,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        verbose_name="关联本地服务器",
+        related_name='cloud_resources'
+    )
+
+    extra_config = models.JSONField("扩展配置", default=dict, blank=True)
+    last_sync_at = models.DateTimeField("最后同步时间", null=True, blank=True)
+
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    updated_at = models.DateTimeField("更新时间", auto_now=True)
+
+    class Meta:
+        verbose_name = "云资源"
+        verbose_name_plural = "云资源"
+        unique_together = ('provider', 'instance_id', 'cloud_account')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"[{self.get_provider_display()}]{self.instance_name or self.instance_id}"
+
+
 class SSLCertificate(models.Model):
     """SSL 证书监控"""
     domain = models.CharField("域名", max_length=100, unique=True)

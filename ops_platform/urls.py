@@ -46,7 +46,7 @@ urlpatterns = [
     path('ssl/add/', cmdb.ssl_cert_add, name='ssl_cert_add'),
     path('ssl/delete/<int:pk>/', cmdb.ssl_cert_delete, name='ssl_cert_delete'),
     path('ssl/refresh/', cmdb.ssl_cert_refresh, name='ssl_cert_refresh'),
-    path('ssl/config/', cmdb.ssl_config_save, name='ssl_config_save'),
+    # path('ssl/config/', cmdb.ssl_config_save, name='ssl_config_save'),
 
     path('agent/install/', cmdb.agent_install, name='agent_install'),
     path('audit/high-risk/', cmdb.high_risk_audit_list, name='high_risk_audit_list'),

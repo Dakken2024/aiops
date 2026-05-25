@@ -99,6 +99,7 @@ MIDDLEWARE = [
 
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'monitoring.middleware.agent_security.AgentSecurityMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -285,6 +286,18 @@ CELERY_BEAT_SCHEDULE = {
     'learn-baselines-daily': {
         'task': 'monitoring.tasks.learn_baselines',
         'schedule': crontab(hour=1, minute=0),
+    },
+    'daily-cleanup': {
+        'task': 'monitoring.tasks.cleanup.daily_cleanup',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'aggregate-metrics-5m': {
+        'task': 'monitoring.tasks.cleanup.aggregate_metrics_5m',
+        'schedule': 300.0,
+    },
+    'aggregate-metrics-1h': {
+        'task': 'monitoring.tasks.cleanup.aggregate_metrics_1h',
+        'schedule': crontab(minute=0),
     },
 }
 SPECTACULAR_SETTINGS = {
