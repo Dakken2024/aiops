@@ -1,0 +1,527 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+<style>
+    .dashboard-card { background: #fff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); height: 100%; }
+    .metric-card { padding: 20px; position: relative; }
+    .metric-title { color: #666; font-size: 14px; margin-bottom: 8px; }
+    .metric-value { font-size: 28px; font-weight: 600; color: #333; }
+    .metric-unit { font-size: 14px; color: #999; margin-left: 4px; font-weight: normal; }
+    .metric-trend-up { color: #52c41a; }
+    .metric-trend-down { color: #ff4d4f; }
+    
+    .filter-bar { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    
+    .resource-card { 
+        border-radius: 8px; padding: 15px; cursor: pointer;
+        transition: all 0.3s; border: 1px solid #e9ecef;
+    }
+    .resource-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    
+    .provider-aliyun { border-left: 4px solid #ff6a00; }
+    .provider-tencent { border-left: 4px solid #006eff; }
+    .provider-huawei { border-left: 4px solid #cf0a2c; }
+    .provider-aws { border-left: 4px solid #ff9900; }
+    .provider-local { border-left: 4px solid #28a745; }
+    
+    .cost-bar { height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; }
+    .cost-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    
+    .nav-tabs-custom { border-bottom: 2px solid #e9ecef; }
+    .nav-tabs-custom .nav-item .nav-link {
+        border: none;
+        border-radius: 0;
+        padding: 10px 20px;
+        color: #666;
+        font-weight: 500;
+        margin-bottom: -2px;
+        border-bottom: 2px solid transparent;
+    }
+    .nav-tabs-custom .nav-item .nav-link.active {
+        color: #1890ff;
+        border-bottom-color: #1890ff;
+        background: transparent;
+    }
+    
+    .status-badge { font-size: 11px; padding: 2px 6px; }
+    .status-running { background: #d4edda; color: #155724; }
+    .status-stopped { background: #f8d7da; color: #721c24; }
+    
+    .table th { font-weight: 500; color: #666; }
+    .table td { vertical-align: middle; }
+    
+    .metric-badge { font-size: 11px; }
+    .metric-normal { background: #d4edda; color: #155724; }
+    .metric-warning { background: #fff3cd; color: #856404; }
+    .metric-danger { background: #f8d7da; color: #721c24; }
+</style>
+
+<!-- 页面标题 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h2><i class="fas fa-cloud mr-2 text-primary"></i>混合监控仪表盘</h2>
+        <p class="text-muted small">统一监控本地服务器与多云资源，实时掌握基础设施状态</p>
+    </div>
+</div>
+
+<!-- 成本概览卡片 -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">本月已花费</div>
+            <div class="metric-value" id="cost-current">
+                <span class="text-primary">¥</span><span id="cost-spent">-</span>
+            </div>
+            <div class="small text-muted mt-2">
+                预算使用率: <span id="cost-usage">-</span>%
+                <span id="cost-trend" class="ml-2"></span>
+            </div>
+            <div class="cost-bar mt-2">
+                <div class="cost-fill" id="cost-bar-fill" style="width:0%; background:#1890ff;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">本月预算</div>
+            <div class="metric-value">
+                <span class="text-info">¥</span><span id="cost-budget">-</span>
+            </div>
+            <div class="small text-muted mt-2">
+                剩余: <span id="cost-remaining">-</span>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">上月花费</div>
+            <div class="metric-value">
+                <span class="text-secondary">¥</span><span id="cost-last-month">-</span>
+            </div>
+            <div class="small text-muted mt-2">
+                环比: <span id="cost-mom">-</span>%
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card">
+            <div class="metric-title">预计月均</div>
+            <div class="metric-value">
+                <span class="text-warning">¥</span><span id="cost-estimated">-</span>
+            </div>
+            <div class="small text-muted mt-2">
+                基于最近3个月数据
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 成本趋势图表 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header bg-light">
+                <h5><i class="fas fa-line-chart mr-2"></i>月度成本趋势</h5>
+            </div>
+            <div class="card-body">
+                <div id="cost-chart" style="height: 250px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选栏 -->
+<div class="filter-bar">
+    <div class="row">
+        <div class="col-lg-3 col-md-4">
+            <label class="small text-muted">云厂商</label>
+            <select class="form-control form-control-sm" id="filter-provider" onchange="loadDashboard()">
+                <option value="">全部厂商</option>
+                <option value="aliyun">阿里云</option>
+                <option value="tencent">腾讯云</option>
+                <option value="huawei">华为云</option>
+                <option value="aws">AWS</option>
+            </select>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <label class="small text-muted">地域</label>
+            <select class="form-control form-control-sm" id="filter-region" onchange="loadDashboard()">
+                <option value="">全部地域</option>
+            </select>
+        </div>
+        <div class="col-lg-3 col-md-4">
+            <label class="small text-muted">资源类型</label>
+            <select class="form-control form-control-sm" id="filter-resource-type" onchange="loadDashboard()">
+                <option value="">全部类型</option>
+                <option value="ecs">云服务器</option>
+                <option value="rds">云数据库</option>
+                <option value="slb">负载均衡</option>
+                <option value="oss">对象存储</option>
+                <option value="redis">云缓存</option>
+                <option value="cdn">CDN</option>
+            </select>
+        </div>
+        <div class="col-lg-3 col-md-12 mt-md-3">
+            <button class="btn btn-sm btn-primary" onclick="loadDashboard()">
+                <i class="fas fa-search mr-1"></i>筛选
+            </button>
+            <button class="btn btn-sm btn-outline-secondary ml-2" onclick="resetFilters()">
+                <i class="fas fa-undo"></i> 重置
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 统计概览 -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card text-center">
+            <div class="metric-value text-success"><i class="fas fa-server mr-1"></i>{{ local_count }}</div>
+            <div class="metric-title">本地服务器</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card text-center">
+            <div class="metric-value text-primary"><i class="fas fa-cloud mr-1"></i>{{ cloud_count }}</div>
+            <div class="metric-title">云资源</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card text-center">
+            <div class="metric-value text-info"><i class="fas fa-desktop mr-1"></i>{{ total_count }}</div>
+            <div class="metric-title">全部资源</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6">
+        <div class="dashboard-card metric-card text-center">
+            <div class="metric-value text-warning"><i class="fas fa-check-circle mr-1"></i>{{ active_count }}</div>
+            <div class="metric-title">运行中</div>
+        </div>
+    </div>
+</div>
+
+<!-- 资源列表 -->
+<ul class="nav nav-tabs nav-tabs-custom mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" data-toggle="tab" href="#local-tab">本地服务器</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" data-toggle="tab" href="#cloud-tab">云资源</a>
+    </li>
+</ul>
+
+<div class="tab-content">
+    <!-- 本地服务器 -->
+    <div class="tab-pane active" id="local-tab">
+        <div class="dashboard-card">
+            <div class="card-header bg-light d-flex justify-content-between">
+                <h5><i class="fas fa-hdd mr-2 text-success"></i>本地服务器列表</h5>
+                <span class="text-muted small">{{ local_servers|length }} 台服务器</span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-sm table-hover mb-0">
+                    <thead class="thead-light">
+                        <tr>
+                            <th width="20"></th>
+                            <th>主机名</th>
+                            <th>IP地址</th>
+                            <th>操作系统</th>
+                            <th width="80">CPU</th>
+                            <th width="80">内存</th>
+                            <th width="80">磁盘</th>
+                            <th width="80">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="local-table-body">
+                        {% for server in local_servers %}
+                        <tr>
+                            <td><i class="fas fa-server text-success"></i></td>
+                            <td><strong>{{ server.hostname }}</strong></td>
+                            <td><code>{{ server.ip_address }}</code></td>
+                            <td>{{ server.os_type }}</td>
+                            <td>{% include 'monitoring/includes/metric_badge.html' with value=server.cpu_usage %}</td>
+                            <td>{% include 'monitoring/includes/metric_badge.html' with value=server.mem_usage %}</td>
+                            <td>{% include 'monitoring/includes/metric_badge.html' with value=server.disk_usage %}</td>
+                            <td>
+                                {% if server.status == 'Running' %}
+                                <span class="badge status-running">运行中</span>
+                                {% else %}
+                                <span class="badge status-stopped">已停止</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted py-4">暂无本地服务器数据</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 云资源 -->
+    <div class="tab-pane" id="cloud-tab">
+        <div class="dashboard-card">
+            <div class="card-header bg-light d-flex justify-content-between">
+                <h5><i class="fas fa-cloud mr-2 text-primary"></i>云资源列表</h5>
+                <button class="btn btn-sm btn-outline-primary" onclick="syncCloudResources()">
+                    <i class="fas fa-sync-alt mr-1"></i>同步资源
+                </button>
+            </div>
+            <div class="card-body">
+                {% if cloud_resources %}
+                <div class="row" id="cloud-resource-grid">
+                    {% for resource in cloud_resources %}
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <div class="resource-card provider-{{ resource.provider }}">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6><strong>{{ resource.instance_name|default:resource.instance_id }}</strong></h6>
+                                    <div class="small text-muted">
+                                        {{ resource.get_resource_type_display }}
+                                        <span class="mx-1">|</span>
+                                        {{ resource.region }}
+                                    </div>
+                                </div>
+                                {% if resource.is_active %}
+                                <span class="badge status-running">运行中</span>
+                                {% else %}
+                                <span class="badge status-stopped">已停止</span>
+                                {% endif %}
+                            </div>
+                            <div class="mt-2 pt-2 border-top">
+                                <div class="small">
+                                    <span class="text-muted">账号:</span> {{ resource.cloud_account_name }}
+                                    {% if resource.local_server_name %}
+                                    <span class="mx-2">|</span>
+                                    <span class="text-muted">关联:</span> {{ resource.local_server_name }}
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs text-muted">
+                                实例ID: {{ resource.instance_id }}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-8">
+                    <i class="fas fa-cloud-off fa-4x mb-3"></i>
+                    <p>暂无云资源数据</p>
+                    <p class="small">请先添加云账号并同步资源</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var costChart = null;
+
+function loadCostTrend() {
+    $.get('/api/monitoring/dashboard/cost-trend/', function(res) {
+        if (res.code !== 0) return;
+        var data = res.data;
+        
+        $('#cost-spent').text(data.current_month.spent.toLocaleString());
+        $('#cost-budget').text(data.current_month.budget.toLocaleString());
+        $('#cost-remaining').text('¥' + data.current_month.remaining.toLocaleString());
+        $('#cost-usage').text(data.current_month.usage_percent);
+        $('#cost-bar-fill').width(data.current_month.usage_percent + '%');
+        $('#cost-last-month').text(data.last_month_cost.toLocaleString());
+        $('#cost-estimated').text(data.estimated_monthly_cost.toLocaleString());
+        
+        var mom = data.month_over_month_change;
+        $('#cost-mom').text((mom >= 0 ? '+' : '') + mom);
+        $('#cost-mom').removeClass('metric-trend-up metric-trend-down');
+        $('#cost-mom').addClass(mom >= 0 ? 'metric-trend-up' : 'metric-trend-down');
+        
+        // 更新图表
+        renderCostChart(data.months, data.costs);
+    });
+}
+
+function renderCostChart(months, costs) {
+    var dom = document.getElementById('cost-chart');
+    if (!costChart) {
+        costChart = echarts.init(dom);
+    }
+    costChart.setOption({
+        tooltip: {
+            trigger: 'axis',
+            formatter: function(params) {
+                var item = params[0];
+                return item.name + '<br>花费: ¥' + item.value.toLocaleString();
+            }
+        },
+        grid: { left: '50', right: '20', top: '30', bottom: '40' },
+        xAxis: {
+            type: 'category',
+            data: months,
+            axisLabel: { fontSize: 11 }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: {
+                formatter: function(value) {
+                    if (value >= 10000) {
+                        return (value / 10000).toFixed(1) + '万';
+                    }
+                    return value;
+                }
+            }
+        },
+        series: [{
+            type: 'bar',
+            data: costs,
+            itemStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: '#1890ff' },
+                    { offset: 1, color: '#91cc75' }
+                ]),
+                borderRadius: [4, 4, 0, 0]
+            },
+            emphasis: {
+                itemStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: '#2378f7' },
+                        { offset: 1, color: '#91cc75' }
+                    ])
+                }
+            }
+        }]
+    });
+    costChart.resize();
+}
+
+function loadDashboard() {
+    var provider = $('#filter-provider').val();
+    var region = $('#filter-region').val();
+    var resourceType = $('#filter-resource-type').val();
+    
+    $.get('/api/monitoring/dashboard/mixed/', {
+        provider: provider,
+        region: region,
+        resource_type: resourceType
+    }, function(res) {
+        if (res.code !== 0) return;
+        updateLocalTable(res.data.local);
+        updateCloudGrid(res.data.cloud);
+        updateSummary(res.data.summary);
+    });
+}
+
+function updateLocalTable(data) {
+    var tbody = $('#local-table-body');
+    if (!data.length) {
+        tbody.html('<tr><td colspan="8" class="text-center text-muted py-4">暂无本地服务器数据</td></tr>');
+        return;
+    }
+    
+    tbody.html(data.map(function(s) {
+        return '<tr>' +
+            '<td><i class="fas fa-server text-success"></i></td>' +
+            '<td><strong>' + esc(s.hostname) + '</strong></td>' +
+            '<td><code>' + esc(s.ip_address) + '</code></td>' +
+            '<td>' + esc(s.os_type) + '</td>' +
+            '<td>' + metricBadge(s.cpu_usage) + '</td>' +
+            '<td>' + metricBadge(s.mem_usage) + '</td>' +
+            '<td>' + metricBadge(s.disk_usage) + '</td>' +
+            '<td><span class="badge status-running">运行中</span></td>' +
+            '</tr>';
+    }).join(''));
+}
+
+function updateCloudGrid(data) {
+    var grid = $('#cloud-resource-grid');
+    if (!data.length) {
+        grid.html('<div class="col-12 text-center text-muted py-8"><i class="fas fa-cloud-off fa-4x mb-3"></i><p>暂无云资源数据</p></div>');
+        return;
+    }
+    
+    grid.html(data.map(function(r) {
+        return '<div class="col-lg-4 col-md-6 mb-3">' +
+            '<div class="resource-card provider-' + esc(r.provider) + '">' +
+            '<div class="d-flex justify-content-between align-items-start">' +
+            '<div>' +
+            '<h6><strong>' + esc(r.instance_name || r.instance_id) + '</strong></h6>' +
+            '<div class="small text-muted">' + esc(r.get_resource_type_display) + '<span class="mx-1">|</span>' + esc(r.region) + '</div>' +
+            '</div>' +
+            (r.is_active ? '<span class="badge status-running">运行中</span>' : '<span class="badge status-stopped">已停止</span>') +
+            '</div>' +
+            '<div class="mt-2 pt-2 border-top">' +
+            '<div class="small"><span class="text-muted">账号:</span> ' + esc(r.cloud_account_name) +
+            (r.local_server_name ? '<span class="mx-2">|</span><span class="text-muted">关联:</span> ' + esc(r.local_server_name) : '') +
+            '</div></div>' +
+            '<div class="mt-2 text-xs text-muted">实例ID: ' + esc(r.instance_id) + '</div>' +
+            '</div></div>';
+    }).join(''));
+}
+
+function updateSummary(summary) {
+    $('#local-count').text(summary.local_count);
+    $('#cloud-count').text(summary.cloud_count);
+    $('#total-count').text(summary.total_count);
+}
+
+function syncCloudResources() {
+    var btn = $('[onclick="syncCloudResources()"]');
+    btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i>同步中');
+    
+    $.ajax({
+        url: '/api/monitoring/cloud/resources/sync/',
+        method: 'POST',
+        success: function(res) {
+            btn.prop('disabled', false).html('<i class="fas fa-sync-alt mr-1"></i>同步资源');
+            if (res.code === 0) {
+                alert('同步完成: 新增 ' + (res.data.created || 0) + ' 个, 更新 ' + (res.data.updated || 0) + ' 个');
+                loadDashboard();
+            } else {
+                alert('同步失败: ' + (res.msg || ''));
+            }
+        },
+        error: function() {
+            btn.prop('disabled', false).html('<i class="fas fa-sync-alt mr-1"></i>同步资源');
+            alert('同步请求失败');
+        }
+    });
+}
+
+function resetFilters() {
+    $('#filter-provider').val('');
+    $('#filter-region').val('');
+    $('#filter-resource-type').val('');
+    loadDashboard();
+}
+
+function esc(s) {
+    if (!s) return '';
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function metricBadge(val) {
+    if (val === null || val === undefined || val === '') {
+        return '<span class="text-muted">-</span>';
+    }
+    var cls = val >= 90 ? 'metric-danger' : val >= 70 ? 'metric-warning' : 'metric-normal';
+    return '<span class="badge ' + cls + '">' + val + '%</span>';
+}
+
+$(function() {
+    loadCostTrend();
+    loadDashboard();
+    
+    $(window).on('resize', function() {
+        if (costChart) costChart.resize();
+    });
+});
+</script>
+{% endblock %}

@@ -1273,9 +1273,74 @@ def webhook_endpoints_page(request):
 def capacity_forecast_page(request):
     return render(request, 'monitoring/capacity_forecast.html')
 
-
 def alert_correlation_page(request):
     return render(request, 'monitoring/alert_correlation.html')
+
+def mixed_dashboard_page(request):
+    """
+    混合监控仪表盘页面
+    合并本地服务器与云资源监控
+    """
+    from cmdb.models import Server, ServerMetric
+    from monitoring.models import CloudResource
+    from django.db.models import Subquery, OuterRef
+
+    # 获取本地服务器数据
+    local_servers = Server.objects.filter(status='Running')
+    subq = ServerMetric.objects.filter(server=OuterRef('id')).order_by('-collected_at')
+    local_servers = local_servers.annotate(
+        latest_cpu=Subquery(subq.values('cpu_usage')[:1]),
+        latest_mem=Subquery(subq.values('mem_usage')[:1]),
+        latest_disk=Subquery(subq.values('disk_usage')[:1]),
+    )
+
+    local_data = []
+    for s in local_servers:
+        local_data.append({
+            'id': s.id,
+            'hostname': s.hostname,
+            'ip_address': s.ip_address,
+            'os_type': s.os_type or '',
+            'status': s.status,
+            'cpu_usage': round(s.latest_cpu, 1) if s.latest_cpu else None,
+            'mem_usage': round(s.latest_mem, 1) if s.latest_mem else None,
+            'disk_usage': round(s.latest_disk, 1) if s.latest_disk else None,
+        })
+
+    # 获取云资源数据
+    cloud_resources = CloudResource.objects.select_related('cloud_account', 'local_server').all()
+    cloud_data = []
+    for r in cloud_resources:
+        cloud_data.append({
+            'id': r.id,
+            'provider': r.provider,
+            'get_provider_display': r.get_provider_display(),
+            'resource_type': r.resource_type,
+            'get_resource_type_display': r.get_resource_type_display(),
+            'instance_id': r.instance_id,
+            'instance_name': r.instance_name,
+            'region': r.region,
+            'cloud_account_name': r.cloud_account.name,
+            'local_server_name': r.local_server.hostname if r.local_server else '',
+            'is_active': r.is_active,
+        })
+
+    return render(request, 'monitoring/dashboard.html', {
+        'local_servers': local_servers,
+        'cloud_resources': cloud_resources,
+        'local_count': len(local_data),
+        'cloud_count': len(cloud_data),
+        'total_count': len(local_data) + len(cloud_data),
+        'active_count': sum(1 for s in local_servers if s.status == 'Running') + sum(1 for r in cloud_resources if r.is_active),
+    })
+
+@login_required
+def vue_dashboard_page(request):
+    """
+    Vue3 监控仪表盘页面
+    使用Vue3组件构建的现代化监控仪表盘
+    """
+    return render(request, 'monitoring/dashboard_vue.html')
 
 
 @login_required

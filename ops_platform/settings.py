@@ -82,6 +82,8 @@ INSTALLED_APPS = [
     'channels',  # WebSocket
     'fernet_fields',  # 字段加密
     'drf_spectacular',
+    'rest_framework',
+    'rest_framework_simplejwt',
     # 自定义应用
     'system',  # 用户、角色、仪表盘、系统设置
     'cmdb',  # 服务器、WebSSH、审计、Agent、云同步
@@ -90,6 +92,9 @@ INSTALLED_APPS = [
     'k8s_manager',  # K8s 多集群管理
     'pgvector',
     'monitoring',  # 智能监控告警 (Phase 1 新增)
+    'tracing',  # 链路追踪集成 (Phase 8 Task 3)
+    'prediction',  # 预测性运维模块 (Phase 8 Task 1)
+    'log_analysis',  # 日志分析引擎 (Phase 8 Task 2)
 ]
 
 MIDDLEWARE = [
@@ -239,11 +244,16 @@ LOGOUT_REDIRECT_URL = '/login/'
 # === 8. 密码加密密钥 (Fernet) ===
 # 用于加密存储 SSH 密码、API Key 等敏感信息
 # 生成 APP_MASTER_KEY (Fernet Key)
-#python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
-# 生产环境请务必更换此 Key！生成方法: from cryptography.fernet import Fernet; Fernet.generate_key()
-FERNET_KEYS = [
-    'T-zxxxx_PLEASE_CHANGE_THIS_IN_PRODUCTION_xxxx='
-]
+# python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+# 生产环境强制从环境变量读取，禁止硬编码
+_APP_MASTER_KEY = os.environ.get('APP_MASTER_KEY')
+if not _APP_MASTER_KEY:
+    raise django.core.exceptions.ImproperlyConfigured(
+        "APP_MASTER_KEY 环境变量未设置。"
+        "请运行: python scripts/generate_fernet_key.py 生成密钥并写入 .env 文件"
+    )
+
+FERNET_KEYS = [_APP_MASTER_KEY]
 
 CELERY_BEAT_SCHEDULE = {
     'check-ssl-certs-every-day': {
@@ -299,7 +309,54 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'monitoring.tasks.cleanup.aggregate_metrics_1h',
         'schedule': crontab(minute=0),
     },
+    'evaluate-rules-parallel': {
+        'task': 'monitoring.tasks.rule_evaluation.evaluate_all_rules_parallel',
+        'schedule': 60.0,
+    },
+    # Phase 8: 链路追踪定时任务
+    'generate-service-map-hourly': {
+        'task': 'tracing.tasks.topology_tasks.generate_service_map',
+        'schedule': crontab(minute=0),
+    },
+    'analyze-slow-endpoints-every-15min': {
+        'task': 'tracing.tasks.topology_tasks.analyze_slow_endpoints',
+        'schedule': 900.0,
+    },
+    'analyze-error-rates-every-15min': {
+        'task': 'tracing.tasks.topology_tasks.analyze_error_rates',
+        'schedule': 900.0,
+    },
+    # Phase 8 Task 1: 预测性运维定时任务
+    'prediction-capacity-daily': {
+        'task': 'prediction.tasks.arima_forecast',
+        'schedule': crontab(hour=2, minute=0),
+        'args': (None, 'cpu', 7),
+    },
+    'prediction-memory-daily': {
+        'task': 'prediction.tasks.arima_forecast',
+        'schedule': crontab(hour=2, minute=30),
+        'args': (None, 'memory', 7),
+    },
+    'prediction-disk-daily': {
+        'task': 'prediction.tasks.arima_forecast',
+        'schedule': crontab(hour=3, minute=0),
+        'args': (None, 'disk', 7),
+    },
+    'prediction-anomaly-hourly': {
+        'task': 'prediction.tasks.isolation_forest_detection',
+        'schedule': crontab(minute=0),
+    },
+    'prediction-baseline-weekly': {
+        'task': 'prediction.tasks.baseline_learning',
+        'schedule': crontab(hour=1, minute=0, day_of_week=1),
+    },
 }
+# 规则评估并行配置
+RULE_EVAL_CHUNK_SIZE = 50
+
+# 修复执行器配置 ('ssh' 或 'docker')
+REMEDIATION_EXECUTOR = os.environ.get('REMEDIATION_EXECUTOR', 'ssh')
+
 SPECTACULAR_SETTINGS = {
     'TITLE': 'AiOps API',
     'DESCRIPTION': 'AI 驱动运维自愈引擎 API 文档',
@@ -307,7 +364,56 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
 }
-# === 9. 默认主键类型 ===
+
+# === DRF + JWT 认证配置 ===
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'MAX_PAGE_SIZE': 200,
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+from datetime import timedelta
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+    
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+    
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+    
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+    
+    'JTI_CLAIM': 'jti',
+    
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
+}
+
+# === 10. 日志配置 (生产环境必备) === 9. 默认主键类型 ===
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # === 10. 日志配置 (生产环境必备) ===

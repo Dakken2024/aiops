@@ -3,6 +3,7 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 from django.contrib.postgres.indexes import GinIndex
+from system.models import Tenant
 
 try:
     from pgvector.django import VectorField
@@ -35,8 +36,11 @@ class AlertRule(models.Model):
         ('composite', '复合条件'),
         ('absence', '消失检测'),
         ('anomaly', '异常检测'),
+        ('tracing_slow', '链路追踪-慢接口'),
+        ('tracing_error', '链路追踪-错误率'),
     ]
 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     name = models.CharField("规则名称", max_length=200, unique=True)
     description = models.TextField("规则描述", blank=True)
     rule_type = models.CharField("规则类型", max_length=20, choices=RULE_TYPE_CHOICES, default='threshold')
@@ -93,6 +97,7 @@ class AlertEvent(models.Model):
         ('other', '其他原因'),
     ]
 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     rule = models.ForeignKey(AlertRule, on_delete=models.CASCADE, related_name='events')
     server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE, null=True, related_name='alert_events')
 
@@ -522,15 +527,16 @@ class CloudResource(models.Model):
         ('slb', '负载均衡'), ('oss', '对象存储'),
         ('redis_cloud', '云缓存'), ('cdn', 'CDN'),
     ]
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户", related_name='monitoring_cloud_resources')
     provider = models.CharField("云厂商", max_length=20, choices=PROVIDER_CHOICES)
     resource_type = models.CharField("资源类型", max_length=20, choices=RESOURCE_TYPE_CHOICES)
     instance_id = models.CharField("实例ID", max_length=100)
     instance_name = models.CharField("实例名称", max_length=200, default='')
     region = models.CharField("区域", max_length=50, default='')
     cloud_account = models.ForeignKey('cmdb.CloudAccount', on_delete=models.CASCADE,
-        related_name='cloud_resources', verbose_name="云账号")
+        related_name='monitoring_cloud_resources', verbose_name="云账号")
     local_server = models.ForeignKey('cmdb.Server', on_delete=models.SET_NULL, null=True, blank=True,
-        related_name='cloud_resource', verbose_name="关联本地服务器")
+        related_name='monitoring_cloud_resource', verbose_name="关联本地服务器")
     extra_config = models.JSONField("扩展配置", default=dict)
     last_sync_at = models.DateTimeField("最后同步时间", null=True, blank=True)
     is_active = models.BooleanField("是否启用", default=True)

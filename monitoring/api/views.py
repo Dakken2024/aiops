@@ -8,7 +8,10 @@ from django.db.models import Count,Q
 from datetime import timedelta
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
-from monitoring.models import AlertRule, AlertEvent, AlertSilenceRule
+from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from monitoring.models import AlertRule, AlertEvent, AlertSilenceRule, AnomalyHistory, AlertGroup, AlertCorrelationRule, RemediationAction, RemediationHistory, RunbookEntry, AgentToken, ServiceTopology, SavedDashboard, HealthScore, CloudResource, DataRetentionPolicy, MetricAggregation, LogEntry, LogPattern, TraceSpan, WebhookEndpoint, CaseVector, MetricBaseline
 from monitoring.engine.rule_evaluator import RuleEvaluator
 
 
@@ -1432,3 +1435,451 @@ def api_capacity_forecast(request):
 
     results = CapacityPredictor.scan_all_servers()
     return JsonResponse({'code': 0, 'data': {'items': results, 'total': len(results)}})
+
+
+# ==================== Phase 6: 混合监控仪表盘 API ====================
+
+@login_required
+@require_GET
+def api_webhook_endpoints(request):
+    from monitoring.models import WebhookEndpoint
+    qs = WebhookEndpoint.objects.all()
+    items, pagination = paginate_queryset(qs, request)
+    data = [{
+        'id': e.id, 'name': e.name, 'url': e.url,
+        'events': e.events, 'is_active': e.is_active,
+        'last_status': e.last_status,
+        'last_sent_at': e.last_sent_at.isoformat() if e.last_sent_at else None,
+    } for e in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_webhook_endpoint_create(request):
+    from monitoring.models import WebhookEndpoint
+    try:
+        body = json.loads(request.body)
+        endpoint = WebhookEndpoint.objects.create(
+            name=body.get('name', ''),
+            url=body.get('url', ''),
+            secret=body.get('secret', ''),
+            events=body.get('events', []),
+            is_active=body.get('is_active', True),
+        )
+        return JsonResponse({'code': 0, 'data': {'id': endpoint.id}})
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)})
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(['PUT', 'POST'])
+def api_webhook_endpoint_update(request, pk):
+    from monitoring.models import WebhookEndpoint
+    try:
+        endpoint = WebhookEndpoint.objects.get(id=pk)
+        body = json.loads(request.body)
+        if 'name' in body: endpoint.name = body['name']
+        if 'url' in body: endpoint.url = body['url']
+        if 'secret' in body: endpoint.secret = body['secret']
+        if 'events' in body: endpoint.events = body['events']
+        if 'is_active' in body: endpoint.is_active = body['is_active']
+        endpoint.save()
+        return JsonResponse({'code': 0})
+    except WebhookEndpoint.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@require_http_methods(['DELETE', 'POST'])
+def api_webhook_endpoint_delete(request, pk):
+    from monitoring.models import WebhookEndpoint
+    try:
+        WebhookEndpoint.objects.get(id=pk).delete()
+        return JsonResponse({'code': 0})
+    except WebhookEndpoint.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_webhook_endpoint_test(request, pk):
+    from monitoring.models import WebhookEndpoint
+    from monitoring.notification.webhook_sender import WebhookSender
+    try:
+        endpoint = WebhookEndpoint.objects.get(id=pk)
+        result = WebhookSender.test_endpoint(endpoint)
+        return JsonResponse({'code': 0, 'data': result})
+    except WebhookEndpoint.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@require_GET
+def api_mixed_dashboard(request):
+    """
+    MixedDashboardAPIView: 混合监控仪表盘 API
+    合并本地服务器 + 云资源指标
+    返回格式: {"local": [...], "cloud": [...]}
+    
+    支持筛选参数:
+    - provider: 云厂商 (aliyun/tencent/huawei/aws)
+    - region: 地域
+    - resource_type: 资源类型 (ecs/rds/slb/oss/redis/cdn)
+    """
+    from cmdb.models import Server, ServerMetric
+    from monitoring.models import CloudResource
+    from django.db.models import Subquery, OuterRef
+
+    # 获取筛选参数
+    provider = request.GET.get('provider')
+    region = request.GET.get('region')
+    resource_type = request.GET.get('resource_type')
+
+    # ========== 获取本地服务器数据 ==========
+    local_servers = Server.objects.filter(status='Running')
+    subq = ServerMetric.objects.filter(server=OuterRef('id')).order_by('-collected_at')
+    local_servers = local_servers.annotate(
+        latest_cpu=Subquery(subq.values('cpu_usage')[:1]),
+        latest_mem=Subquery(subq.values('mem_usage')[:1]),
+        latest_disk=Subquery(subq.values('disk_usage')[:1]),
+    )
+
+    local_data = [{
+        'id': s.id,
+        'type': 'local',
+        'hostname': s.hostname,
+        'ip_address': s.ip_address,
+        'status': s.status,
+        'os_type': s.os_type or '',
+        'provider': s.provider,
+        'cpu_usage': round(s.latest_cpu, 1) if s.latest_cpu else None,
+        'mem_usage': round(s.latest_mem, 1) if s.latest_mem else None,
+        'disk_usage': round(s.latest_disk, 1) if s.latest_disk else None,
+    } for s in local_servers]
+
+    # ========== 获取云资源数据 ==========
+    cloud_qs = CloudResource.objects.select_related('cloud_account', 'local_server').all()
+    
+    if provider:
+        cloud_qs = cloud_qs.filter(provider=provider)
+    if region:
+        cloud_qs = cloud_qs.filter(region__icontains=region)
+    if resource_type:
+        cloud_qs = cloud_qs.filter(resource_type=resource_type)
+
+    cloud_data = [{
+        'id': r.id,
+        'type': 'cloud',
+        'provider': r.provider,
+        'get_provider_display': r.get_provider_display(),
+        'resource_type': r.resource_type,
+        'get_resource_type_display': r.get_resource_type_display(),
+        'instance_id': r.instance_id,
+        'instance_name': r.instance_name,
+        'region': r.region,
+        'cloud_account_name': r.cloud_account.name,
+        'local_server_name': r.local_server.hostname if r.local_server else '',
+        'local_server_id': r.local_server.id if r.local_server else None,
+        'is_active': r.is_active,
+        'last_sync_at': r.last_sync_at.isoformat() if r.last_sync_at else None,
+        'extra_config': r.extra_config,
+    } for r in cloud_qs]
+
+    return JsonResponse({
+        'code': 0,
+        'data': {
+            'local': local_data,
+            'cloud': cloud_data,
+            'summary': {
+                'local_count': len(local_data),
+                'cloud_count': len(cloud_data),
+                'total_count': len(local_data) + len(cloud_data),
+            }
+        }
+    })
+
+
+@login_required
+@require_GET
+def api_cost_trend(request):
+    """
+    云资源成本概览 API
+    返回月度成本趋势数据（模拟数据）
+    """
+    from datetime import datetime
+    
+    now = datetime.now()
+    months = []
+    costs = []
+    
+    for i in range(12):
+        month = now.replace(month=now.month - i if now.month > i else now.month - i + 12, 
+                           day=1, hour=0, minute=0, second=0)
+        months.append(month.strftime('%Y-%m'))
+        # 生成模拟成本数据（在 5000-25000 之间波动）
+        base_cost = 12000
+        variance = (i % 3 - 1) * 3000 + (i % 2) * 1500
+        costs.append(base_cost + variance + int(i * 200))
+    
+    months.reverse()
+    costs.reverse()
+    
+    # 当前月份预算
+    current_month_budget = 30000
+    current_month_cost = costs[-1] if costs else 0
+    budget_usage = round((current_month_cost / current_month_budget) * 100, 1)
+    
+    return JsonResponse({
+        'code': 0,
+        'data': {
+            'months': months,
+            'costs': costs,
+            'currency': 'CNY',
+            'current_month': {
+                'budget': current_month_budget,
+                'spent': current_month_cost,
+                'remaining': current_month_budget - current_month_cost,
+                'usage_percent': budget_usage,
+            },
+            'last_month_cost': costs[-2] if len(costs) > 1 else 0,
+            'month_over_month_change': round(((current_month_cost - (costs[-2] if len(costs) > 1 else current_month_cost)) / (costs[-2] if len(costs) > 1 else 1)) * 100, 1),
+            'estimated_monthly_cost': round(sum(costs[-3:]) / 3, 0) if len(costs) >= 3 else current_month_cost,
+        }
+    })
+
+
+# ==================== DRF ViewSets ====================
+
+from rest_framework import serializers
+
+class AlertRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertRule
+        fields = '__all__'
+
+class AlertEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertEvent
+        fields = '__all__'
+
+class AlertSilenceRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertSilenceRule
+        fields = '__all__'
+
+class AnomalyHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AnomalyHistory
+        fields = '__all__'
+
+class AlertGroupSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertGroup
+        fields = '__all__'
+
+class AlertCorrelationRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AlertCorrelationRule
+        fields = '__all__'
+
+class RemediationActionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RemediationAction
+        fields = '__all__'
+
+class RemediationHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RemediationHistory
+        fields = '__all__'
+
+class RunbookEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RunbookEntry
+        fields = '__all__'
+
+class AgentTokenSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AgentToken
+        fields = '__all__'
+
+class ServiceTopologySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ServiceTopology
+        fields = '__all__'
+
+class SavedDashboardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SavedDashboard
+        fields = '__all__'
+
+class HealthScoreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HealthScore
+        fields = '__all__'
+
+class MonitoringCloudResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CloudResource
+        fields = '__all__'
+
+class DataRetentionPolicySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DataRetentionPolicy
+        fields = '__all__'
+
+class MetricAggregationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MetricAggregation
+        fields = '__all__'
+
+class LogEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LogEntry
+        fields = '__all__'
+
+class LogPatternSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LogPattern
+        fields = '__all__'
+
+class TraceSpanSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TraceSpan
+        fields = '__all__'
+
+class WebhookEndpointSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WebhookEndpoint
+        fields = '__all__'
+
+class CaseVectorSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CaseVector
+        fields = '__all__'
+
+class MetricBaselineSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MetricBaseline
+        fields = '__all__'
+
+
+class AlertRuleViewSet(viewsets.ModelViewSet):
+    queryset = AlertRule.objects.all()
+    serializer_class = AlertRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['post'])
+    def toggle(self, request, pk=None):
+        rule = self.get_object()
+        rule.status = 'disabled' if rule.status == 'enabled' else 'enabled'
+        rule.save()
+        return Response({'status': rule.status})
+
+class AlertEventViewSet(viewsets.ModelViewSet):
+    queryset = AlertEvent.objects.all()
+    serializer_class = AlertEventSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AlertSilenceRuleViewSet(viewsets.ModelViewSet):
+    queryset = AlertSilenceRule.objects.all()
+    serializer_class = AlertSilenceRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AnomalyHistoryViewSet(viewsets.ModelViewSet):
+    queryset = AnomalyHistory.objects.all()
+    serializer_class = AnomalyHistorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AlertGroupViewSet(viewsets.ModelViewSet):
+    queryset = AlertGroup.objects.all()
+    serializer_class = AlertGroupSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AlertCorrelationRuleViewSet(viewsets.ModelViewSet):
+    queryset = AlertCorrelationRule.objects.all()
+    serializer_class = AlertCorrelationRuleSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class RemediationActionViewSet(viewsets.ModelViewSet):
+    queryset = RemediationAction.objects.all()
+    serializer_class = RemediationActionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class RemediationHistoryViewSet(viewsets.ModelViewSet):
+    queryset = RemediationHistory.objects.all()
+    serializer_class = RemediationHistorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class RunbookEntryViewSet(viewsets.ModelViewSet):
+    queryset = RunbookEntry.objects.all()
+    serializer_class = RunbookEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class AgentTokenViewSet(viewsets.ModelViewSet):
+    queryset = AgentToken.objects.all()
+    serializer_class = AgentTokenSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class ServiceTopologyViewSet(viewsets.ModelViewSet):
+    queryset = ServiceTopology.objects.all()
+    serializer_class = ServiceTopologySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class SavedDashboardViewSet(viewsets.ModelViewSet):
+    queryset = SavedDashboard.objects.all()
+    serializer_class = SavedDashboardSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class HealthScoreViewSet(viewsets.ModelViewSet):
+    queryset = HealthScore.objects.all()
+    serializer_class = HealthScoreSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class MonitoringCloudResourceViewSet(viewsets.ModelViewSet):
+    queryset = CloudResource.objects.all()
+    serializer_class = MonitoringCloudResourceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class DataRetentionPolicyViewSet(viewsets.ModelViewSet):
+    queryset = DataRetentionPolicy.objects.all()
+    serializer_class = DataRetentionPolicySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class MetricAggregationViewSet(viewsets.ModelViewSet):
+    queryset = MetricAggregation.objects.all()
+    serializer_class = MetricAggregationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class LogEntryViewSet(viewsets.ModelViewSet):
+    queryset = LogEntry.objects.all()
+    serializer_class = LogEntrySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class LogPatternViewSet(viewsets.ModelViewSet):
+    queryset = LogPattern.objects.all()
+    serializer_class = LogPatternSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class TraceSpanViewSet(viewsets.ModelViewSet):
+    queryset = TraceSpan.objects.all()
+    serializer_class = TraceSpanSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class WebhookEndpointViewSet(viewsets.ModelViewSet):
+    queryset = WebhookEndpoint.objects.all()
+    serializer_class = WebhookEndpointSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class CaseVectorViewSet(viewsets.ModelViewSet):
+    queryset = CaseVector.objects.all()
+    serializer_class = CaseVectorSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+class MetricBaselineViewSet(viewsets.ModelViewSet):
+    queryset = MetricBaseline.objects.all()
+    serializer_class = MetricBaselineSerializer
+    permission_classes = [permissions.IsAuthenticated]

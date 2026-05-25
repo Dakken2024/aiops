@@ -172,7 +172,9 @@ def execute_remediation_task(history_id):
             return {'status': 'failed', 'action': action.name, 'error': 'invalid_command'}
 
         if server:
-            output, error, exit_code = _execute_via_ssh(server, cmd, timeout)
+            from django.conf import settings
+            executor_type = getattr(settings, 'REMEDIATION_EXECUTOR', 'ssh')
+            output, error, exit_code = _execute_with_executor(server, cmd, timeout, executor_type)
         else:
             history.status = 'failed'
             history.error_message = '无目标服务器'
@@ -216,26 +218,111 @@ def execute_remediation_task(history_id):
     }
 
 
+class RemoteExecutor:
+    """
+    远程命令执行器基类
+    """
+    
+    @staticmethod
+    def execute(server, command, timeout=300):
+        """执行命令，子类必须实现"""
+        raise NotImplementedError
+
+
+class SSHExecutor(RemoteExecutor):
+    """
+    SSH 远程执行器（Paramiko）
+    """
+    
+    @staticmethod
+    def execute(server, command, timeout=300):
+        import paramiko
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        try:
+            connect_kwargs = {
+                'hostname': server.ip_address,
+                'port': server.port,
+                'username': server.username,
+                'timeout': min(timeout, 30),
+            }
+            if server.password:
+                connect_kwargs['password'] = server.password
+            client.connect(**connect_kwargs)
+            stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+            exit_code = stdout.channel.recv_exit_status()
+            output = stdout.read().decode('utf-8', errors='replace')
+            error = stderr.read().decode('utf-8', errors='replace')
+            return output, error, exit_code
+        except Exception as e:
+            return '', str(e), -1
+        finally:
+            client.close()
+
+
+class DockerSandboxExecutor(RemoteExecutor):
+    """
+    Docker 容器化沙箱执行器
+    在隔离容器中执行命令，限制资源使用
+    """
+    
+    @staticmethod
+    def execute(server, command, timeout=300):
+        """
+        在 Docker 容器中执行命令
+        
+        限制:
+        - CPU: 1 核
+        - 内存: 512MB
+        - 超时自动销毁
+        """
+        import subprocess
+        import uuid
+        
+        container_name = f"aiops-remediation-{uuid.uuid4().hex[:8]}"
+        
+        # 构建 Docker 运行命令
+        docker_cmd = [
+            'docker', 'run', '--rm',
+            '--name', container_name,
+            '--cpus', '1.0',
+            '--memory', '512m',
+            '--network', 'none',  # 禁用网络
+            '--read-only',  # 只读根文件系统
+            '-v', '/tmp:/tmp:rw',  # 仅允许写入 /tmp
+            'alpine:latest',
+            'sh', '-c', command
+        ]
+        
+        try:
+            result = subprocess.run(
+                docker_cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+            return result.stdout, result.stderr, result.returncode
+        except subprocess.TimeoutExpired:
+            # 强制清理容器
+            subprocess.run(['docker', 'rm', '-f', container_name], capture_output=True)
+            return '', '执行超时，容器已强制销毁', -1
+        except Exception as e:
+            return '', str(e), -1
+
+
 def _execute_via_ssh(server, command, timeout=300):
-    import paramiko
-    client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    try:
-        connect_kwargs = {
-            'hostname': server.ip_address,
-            'port': server.port,
-            'username': server.username,
-            'timeout': min(timeout, 30),
-        }
-        if server.password:
-            connect_kwargs['password'] = server.password
-        client.connect(**connect_kwargs)
-        stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-        exit_code = stdout.channel.recv_exit_status()
-        output = stdout.read().decode('utf-8', errors='replace')
-        error = stderr.read().decode('utf-8', errors='replace')
-        return output, error, exit_code
-    except Exception as e:
-        return '', str(e), -1
-    finally:
-        client.close()
+    """
+    兼容旧接口，使用 SSH 执行
+    """
+    return SSHExecutor.execute(server, command, timeout)
+
+
+def _execute_with_executor(server, command, timeout=300, executor_type='ssh'):
+    """
+    根据配置选择执行器
+    
+    :param executor_type: 'ssh' 或 'docker'
+    """
+    if executor_type == 'docker':
+        return DockerSandboxExecutor.execute(server, command, timeout)
+    return SSHExecutor.execute(server, command, timeout)

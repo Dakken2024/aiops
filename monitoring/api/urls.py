@@ -73,4 +73,7 @@ urlpatterns = [
     path('webhooks/<int:pk>/update/', views.api_webhook_endpoint_update, name='api_webhook_endpoint_update'),
     path('webhooks/<int:pk>/delete/', views.api_webhook_endpoint_delete, name='api_webhook_endpoint_delete'),
     path('webhooks/<int:pk>/test/', views.api_webhook_endpoint_test, name='api_webhook_endpoint_test'),
+    # Phase 6: 混合监控仪表盘 API
+    path('dashboard/mixed/', views.api_mixed_dashboard, name='api_mixed_dashboard'),
+    path('dashboard/cost-trend/', views.api_cost_trend, name='api_cost_trend'),
 ]

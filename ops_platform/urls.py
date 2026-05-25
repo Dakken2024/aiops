@@ -62,6 +62,7 @@ urlpatterns = [
     path('script/', include('script_manager.urls')),
     path('k8s/', include('k8s_manager.urls')),
     path('api/monitoring/', include('monitoring.api.urls')),
+    path('api/tracing/', include('tracing.urls')),
     path('monitoring/cloud/accounts/', cmdb.cloud_accounts_page, name='cloud_accounts_page'),
     path('monitoring/cloud/resources/', cmdb.cloud_resources_page, name='cloud_resources_page'),
     path('monitoring/logs/search/', cmdb.log_search_page, name='log_search_page'),
@@ -70,9 +71,12 @@ urlpatterns = [
     path('monitoring/webhooks/', cmdb.webhook_endpoints_page, name='webhook_endpoints_page'),
     path('monitoring/capacity/', cmdb.capacity_forecast_page, name='capacity_forecast_page'),
     path('monitoring/alerts/correlation/', cmdb.alert_correlation_page, name='alert_correlation_page'),
+    path('monitoring/dashboard/', cmdb.mixed_dashboard_page, name='mixed_dashboard_page'),
+    path('monitoring/dashboard/vue/', cmdb.vue_dashboard_page, name='vue_dashboard_page'),
 ]
 urlpatterns += [
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+    path('api/v1/', include('ops_platform.api_urls')),
 ]

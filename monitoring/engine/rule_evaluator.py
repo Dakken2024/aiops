@@ -27,6 +27,7 @@ class RuleEvaluator:
 
     @classmethod
     def evaluate_all(cls):
+        """串行评估所有规则（小规则量时使用）"""
         results = {'evaluated':0,'fired':0,'errors':[]}
         for rule in AlertRule.objects.filter(status='enabled'):
             try:
@@ -37,6 +38,42 @@ class RuleEvaluator:
             except Exception as e:
                 logger.error(f"[RuleEngine] 规则{rule.id}异常: {e}")
                 results['errors'].append({'rule_id':rule.id,'error':str(e)})
+        return results
+
+    @classmethod
+    def evaluate_all_parallel(cls, chunk_size=None):
+        """
+        并行评估所有规则（Celery 分片执行）
+        
+        :param chunk_size: 每批规则数量，默认从 settings 读取 RULE_EVAL_CHUNK_SIZE
+        :return: 汇总结果
+        """
+        from django.conf import settings
+        chunk_size = chunk_size or getattr(settings, 'RULE_EVAL_CHUNK_SIZE', 50)
+        
+        rules = list(AlertRule.objects.filter(status='enabled').values_list('id', flat=True))
+        if not rules:
+            return {'evaluated': 0, 'fired': 0, 'errors': []}
+        
+        # 规则数量少时直接串行执行
+        if len(rules) <= chunk_size:
+            return cls.evaluate_all()
+        
+        # 分片并并行执行
+        from monitoring.tasks.rule_evaluation import evaluate_rule_chunk
+        results = {'evaluated': 0, 'fired': 0, 'errors': []}
+        
+        for i in range(0, len(rules), chunk_size):
+            chunk = rules[i:i + chunk_size]
+            try:
+                chunk_result = evaluate_rule_chunk.delay(chunk).get(timeout=300)
+                results['evaluated'] += chunk_result.get('evaluated', 0)
+                results['fired'] += chunk_result.get('fired', 0)
+                results['errors'].extend(chunk_result.get('errors', []))
+            except Exception as e:
+                logger.error(f"[RuleEngine] 分片评估失败 chunk={chunk}: {e}")
+                results['errors'].append({'chunk': chunk, 'error': str(e)})
+        
         return results
 
     @classmethod
@@ -57,6 +94,42 @@ class RuleEvaluator:
             except Exception as e:
                 logger.error(f"[RuleEngine] 服务器{server_id}规则{rule.id}异常: {e}")
                 results['errors'].append({'rule_id': rule.id, 'error': str(e)})
+        return results
+
+    @classmethod
+    def event_driven_evaluate(cls, metric):
+        """
+        事件驱动评估：当新指标到达时立即评估关联规则
+        
+        :param metric: 指标数据字典，包含 server_id, metric_name, value, timestamp
+        :return: 评估结果字典
+        """
+        server_id = metric.get('server_id')
+        metric_name = metric.get('metric_name')
+        
+        if not server_id or not metric_name:
+            return {'evaluated': 0, 'fired': 0, 'error': 'missing_params'}
+        
+        results = {'evaluated': 0, 'fired': 0, 'errors': []}
+        
+        rules = AlertRule.objects.filter(
+            status='enabled',
+            metric_name=metric_name
+        ).filter(
+            dj_models.Q(target_all=True) | dj_models.Q(target_servers__id=server_id)
+        ).distinct()
+        
+        for rule in rules:
+            try:
+                evaluator = cls(rule)
+                fired, _ = evaluator.evaluate(server_id=server_id)
+                results['evaluated'] += 1
+                if fired:
+                    results['fired'] += 1
+            except Exception as e:
+                logger.error(f"[RuleEngine] 事件驱动评估失败 服务器{server_id}规则{rule.id}: {e}")
+                results['errors'].append({'rule_id': rule.id, 'error': str(e)})
+        
         return results
 
     def __init__(self, rule):
@@ -100,10 +173,32 @@ class RuleEvaluator:
             return None,None
 
     def _series(self, server, limit=30):
+        """
+        获取指标时序数据，优先从 Redis 缓存读取
+        """
         from cmdb.models import ServerMetric
-        field = METRIC_FIELD_MAP.get(self.rule.metric_name,'cpu_usage')
+        from monitoring.utils.redis_cache import ts_cache
+        
+        field = METRIC_FIELD_MAP.get(self.rule.metric_name, 'cpu_usage')
+        
+        # 优先从 Redis 缓存读取
+        cached_values = ts_cache.get_series(server.id, field, limit=limit)
+        if len(cached_values) >= limit:
+            return cached_values
+        
+        # 缓存不足时从数据库补充
         qs = ServerMetric.objects.filter(server=server).order_by('-created_at')[:limit]
-        return [getattr(m,field) for m in reversed(qs)]
+        db_values = [getattr(m, field) for m in reversed(qs)]
+        
+        # 同步写入缓存
+        for m in qs:
+            try:
+                value = getattr(m, field)
+                ts_cache.add_metric(server.id, field, value, m.created_at)
+            except Exception:
+                pass
+        
+        return db_values
 
     def _fire(self, server, result):
         if AlertEvent.objects.filter(rule=self.rule,server=server,status='firing',

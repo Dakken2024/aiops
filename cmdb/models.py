@@ -2,12 +2,13 @@ import uuid
 from django.db import models
 from fernet_fields import EncryptedCharField
 from django.contrib.auth.models import Group
-from system.models import User
+from system.models import User, Tenant
 from fernet_fields import EncryptedCharField  # 确保引入
 import ipaddress
 class ServerGroup(models.Model):
     """服务器分组 (树形结构)"""
     name = models.CharField("组名", max_length=50)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     # self-referencing ForeignKey 实现无限层级目录
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children',
                                verbose_name="上级分组")
@@ -27,6 +28,7 @@ class Server(models.Model):
         ('Stopped', '已停止'),
     )
 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     group = models.ForeignKey(ServerGroup, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="所属分组")
     hostname = models.CharField("主机名", max_length=100)
     ip_address = models.GenericIPAddressField("IP地址", unique=True)
@@ -65,6 +67,7 @@ class CloudAccount(models.Model):
         ('aws', 'AWS'),
     )
 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     name = models.CharField("账号名称/别名", max_length=50, help_text="例如：生产环境主账号")
 
     # AccessKey ID 不敏感，明文存储以便检索
@@ -169,6 +172,7 @@ class CloudResource(models.Model):
         ('cdn', 'CDN'),
     )
 
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     provider = models.CharField("云厂商", max_length=20, choices=PROVIDER_CHOICES)
     resource_type = models.CharField("资源类型", max_length=20, choices=RESOURCE_TYPE_CHOICES)
     instance_id = models.CharField("实例ID", max_length=100, db_index=True)
@@ -208,6 +212,7 @@ class CloudResource(models.Model):
 
 class SSLCertificate(models.Model):
     """SSL 证书监控"""
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     domain = models.CharField("域名", max_length=100, unique=True)
     port = models.IntegerField("端口", default=443)
 

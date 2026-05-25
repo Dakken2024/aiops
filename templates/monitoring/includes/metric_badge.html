@@ -1,0 +1,9 @@
+{% if value == None or value == '' %}
+<span class="text-muted">-</span>
+{% elif value >= 90 %}
+<span class="badge badge-danger">{{ value }}%</span>
+{% elif value >= 70 %}
+<span class="badge badge-warning">{{ value }}%</span>
+{% else %}
+<span class="badge badge-success">{{ value }}%</span>
+{% endif %}

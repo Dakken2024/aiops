@@ -1,0 +1,51 @@
+groups:
+  - name: postgres_alerts
+    rules:
+      - alert: PostgresHighConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high connection count"
+          description: "PostgreSQL on {{ $labels.instance }} has {{ $value }} active connections (threshold: 80) for more than 5 minutes."
+
+      - alert: PostgresSlowQueries
+        expr: |
+          (
+            pg_stat_activity_max_tx_duration{datname!~"template.*"} > 300
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL slow queries detected"
+          description: "PostgreSQL on {{ $labels.instance }} has slow queries with max transaction duration {{ $value }}s in database {{ $labels.datname }}."
+
+      - alert: DatabaseSizeGrowingFast
+        expr: |
+          (
+            (
+              pg_database_size_bytes{datname!~"template.*"}
+              -
+              pg_database_size_bytes{datname!~"template.*"} offset 1d
+            ) / (1024 * 1024 * 1024)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL database size growing fast"
+          description: "Database {{ $labels.datname }} on {{ $labels.instance }} grew by {{ $value | humanize }}GB in the last 24 hours."
+
+      - alert: PostgresDeadlocks
+        expr: |
+          (
+            rate(pg_stat_database_deadlocks{datname!~"template.*"}[5m]) > 0
+          )
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL deadlocks detected"
+          description: "PostgreSQL on {{ $labels.instance }} database {{ $labels.datname }} has {{ $value }} deadlocks per second in the last 5 minutes."

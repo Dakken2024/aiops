@@ -36,3 +36,5 @@ opentelemetry-sdk>=1.20.0
 # === Prometheus RemoteWrite 可选依赖 ===
 # python-snappy  # 可选: 用于解压 Prometheus RemoteWrite snappy 编码数据
 drf-spectacular>=0.27.0
+djangorestframework
+djangorestframework-simplejwt

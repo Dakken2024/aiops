@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<!-- Vue应用挂载点 -->
+<div id="vue-dashboard"></div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- 加载Vue构建的静态资源 -->
+<!-- 注意：先运行 npm run build 构建Vue应用 -->
+<script>
+// 尝试加载构建的Vue应用
+(function() {
+    // 检查是否有构建的资源
+    const loadVueApp = function() {
+        // 创建script标签动态加载
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = '{% static "vue-dist/assets/index.js" %}';
+        script.onerror = function() {
+            console.warn('Vue应用构建文件未找到，请先运行: cd frontend && npm install && npm run build');
+            document.getElementById('vue-dashboard').innerHTML = `
+                <div class="container mt-5">
+                    <div class="alert alert-warning">
+                        <h4><i class="fas fa-info-circle"></i> Vue仪表盘未构建</h4>
+                        <p>请在项目根目录执行以下命令构建Vue应用：</p>
+                        <pre><code>cd frontend
+npm install
+npm run build</code></pre>
+                        <p>构建完成后刷新此页面即可。</p>
+                    </div>
+                </div>
+            `;
+        };
+        document.body.appendChild(script);
+    };
+    
+    // 延迟加载以确保DOM准备好
+    setTimeout(loadVueApp, 100);
+})();
+</script>
+{% endblock %}
