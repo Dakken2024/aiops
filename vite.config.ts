@@ -5,7 +5,7 @@ import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: './', // For GitHub Pages - change to '/your-repo-name/' if needed
+  base: '/aiops/', // GitHub Pages deployment
   build: {
     sourcemap: 'hidden',
   },
