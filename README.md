@@ -19,6 +19,7 @@
 
 ### 主要增强内容
 
+- 🏢 **多租户架构** (`system/`) — 完整的租户隔离体系，支持多租户数据隔离
 - 🧠 **AIOps 智能监控模块** (`monitoring/`) — 全新开发的核心监控子系统
 - 🔍 **多算法异常检测** — Z-Score / IQR / 移动平均 / 变化率 / 复合投票等 6+ 种检测算法
 - 🤖 **Qwen3 AI 根因分析** — 基于阿里云通义千问的智能诊断引擎（OpenAI 兼容接口）
@@ -245,8 +246,11 @@ aiops/
 │   ├── consumers.py              # WebSocket（容器终端/日志）
 │   └── views.py                  # 视图（集群管理 / 资源 CRUD）
 │
-├── system/                       # 系统管理模块
-│   ├── models.py                 # 用户、角色模型
+├── system/                       # ★ 系统管理模块（含多租户架构）
+│   ├── models.py                 # 用户、租户、系统配置、角色模型
+│   ├── managers.py               # TenantManager（自动租户过滤管理器）
+│   ├── middleware/tenant_middleware.py  # 租户识别与上下文管理中间件
+│   ├── admin.py                  # 系统管理后台（用户、租户管理）
 │   ├── auth_backend.py           # LDAP 认证后端
 │   └── validators.py             # 密码复杂度验证
 │

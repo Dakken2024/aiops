@@ -27,6 +27,7 @@ class Tenant(models.Model):
 class User(AbstractUser):
     phone = models.CharField("手机号", max_length=11, blank=True, null=True)
     department = models.CharField("部门", max_length=50, blank=True, null=True)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
 
     class Meta:
         verbose_name = "用户"

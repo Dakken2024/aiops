@@ -3,6 +3,7 @@ from django.db import models
 from fernet_fields import EncryptedCharField
 from django.contrib.auth.models import Group
 from system.models import User, Tenant
+from system.managers import TenantManager
 from fernet_fields import EncryptedCharField  # 确保引入
 import ipaddress
 class ServerGroup(models.Model):
@@ -12,6 +13,8 @@ class ServerGroup(models.Model):
     # self-referencing ForeignKey 实现无限层级目录
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children',
                                verbose_name="上级分组")
+    
+    objects = TenantManager()
 
     def __str__(self):
         return self.name
@@ -48,6 +51,8 @@ class Server(models.Model):
     agent_token = models.CharField("Agent Token", max_length=64, blank=True, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    objects = TenantManager()
 
     def save(self, *args, **kwargs):
         # 自动生成 Token
@@ -84,6 +89,8 @@ class CloudAccount(models.Model):
     extra_config = models.JSONField("扩展配置", default=dict, help_text="华为云/AWS等额外配置")
 
     create_at = models.DateTimeField(auto_now_add=True)
+    
+    objects = TenantManager()
 
     def __str__(self):
         return f"{self.get_type_display()} - {self.name}"
@@ -199,6 +206,8 @@ class CloudResource(models.Model):
 
     created_at = models.DateTimeField("创建时间", auto_now_add=True)
     updated_at = models.DateTimeField("更新时间", auto_now=True)
+    
+    objects = TenantManager()
 
     class Meta:
         verbose_name = "云资源"
@@ -230,6 +239,8 @@ class SSLCertificate(models.Model):
     auto_alert = models.BooleanField("自动告警", default=True)
 
     updated_at = models.DateTimeField("最后检测时间", auto_now=True)
+    
+    objects = TenantManager()
 
     def __str__(self):
         return self.domain

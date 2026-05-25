@@ -16,15 +16,18 @@ class TenantMiddleware:
         # 尝试从请求中识别租户
         request.tenant = None
 
-        # 1. 从用户 profile 获取租户（如果用户已认证）
+        # 1. 从用户信息获取租户（如果用户已认证）
         if hasattr(request, 'user') and request.user.is_authenticated:
-            # 这里可以根据实际需求扩展，比如在 User 模型中添加 tenant 字段
-            pass
+            try:
+                if hasattr(request.user, 'tenant') and request.user.tenant:
+                    request.tenant = request.user.tenant
+            except Exception:
+                pass
 
         # 2. 从子域名识别租户
         if not request.tenant:
             host = request.get_host().split(':')[0]  # 去掉端口
-            # 假设租户通过子域名访问，如 tenant1.example.com
+            # 假设租户通过子域名访问，例如 tenant1.example.com
             parts = host.split('.')
             if len(parts) >= 3:  # 至少有三级域名
                 subdomain = parts[0]

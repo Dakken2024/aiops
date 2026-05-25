@@ -4,6 +4,7 @@ from django.conf import settings
 from django.utils import timezone
 from django.contrib.postgres.indexes import GinIndex
 from system.models import Tenant
+from system.managers import TenantManager
 
 try:
     from pgvector.django import VectorField
@@ -67,6 +68,8 @@ class AlertRule(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     last_triggered_at = models.DateTimeField("最后触发时间", null=True, blank=True)
     trigger_count = models.PositiveIntegerField("累计触发次数", default=0)
+    
+    objects = TenantManager()
 
     class Meta:
         ordering = ['-created_at']
@@ -117,10 +120,12 @@ class AlertEvent(models.Model):
     notification_log = models.JSONField("通知记录", default=list)
 
     resolve_reason = models.CharField("关闭原因", max_length=30, choices=RESOLVE_REASON_CHOICES,
-                                     blank=True, null=True)
+                                      blank=True, null=True)
     resolve_comment = models.TextField("处理备注", blank=True, default='')
     resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
                                     related_name='resolved_alerts')
+    
+    objects = TenantManager()
 
     class Meta:
         ordering = ['-fired_at']
@@ -542,6 +547,8 @@ class CloudResource(models.Model):
     is_active = models.BooleanField("是否启用", default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    objects = TenantManager()
 
     class Meta:
         verbose_name = '云资源'

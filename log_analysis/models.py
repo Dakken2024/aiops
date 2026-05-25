@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from cmdb.models import Server
 from system.models import Tenant
+from system.managers import TenantManager
 
 
 class LogSource(models.Model):
@@ -19,6 +20,8 @@ class LogSource(models.Model):
     is_enabled = models.BooleanField("是否启用", default=True)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     
+    objects = TenantManager()
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -101,7 +104,7 @@ class LogAlertRule(models.Model):
     keywords = models.JSONField("关键字列表", default=list, help_text="关键字匹配模式下使用")
     pattern_id = models.ForeignKey(LogPattern, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="匹配模式")
     level_filter = models.CharField("级别过滤", max_length=50, blank=True, default='',
-        help_text="逗号分隔的级别列表，如: error,critical")
+        help_text="逗号分隔的级别列表，例如：error,critical")
     
     threshold_count = models.IntegerField("触发阈值", default=1,
         help_text="在时间窗口内达到此数量触发告警")
@@ -110,6 +113,8 @@ class LogAlertRule(models.Model):
     is_enabled = models.BooleanField("是否启用", default=True)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True, blank=True, verbose_name="所属租户")
     
+    objects = TenantManager()
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     last_triggered_at = models.DateTimeField("最后触发时间", null=True, blank=True)

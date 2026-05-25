@@ -98,6 +98,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'system.middleware.tenant_middleware.TenantMiddleware',
     'django.middleware.security.SecurityMiddleware',
     # WhiteNoise: 负责在生产环境(DEBUG=False)下高效分发静态文件
     'whitenoise.middleware.WhiteNoiseMiddleware',
