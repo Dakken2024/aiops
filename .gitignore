@@ -1,60 +1,181 @@
-# ============================================================
-# AiOps .gitignore
-# ============================================================
-
-# --- 环境变量 (含敏感信息，禁止提交) ---
-.env
-.env.local
-.env.production
-.env.*.local
-.trae/
-.vscode/
-docs/
-# --- Python ---
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+
+# Distribution / packaging
 .Python
-*.egg-info/
-*.egg
-dist/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# --- 虚拟环境 ---
-venv/
-.venv/
-ENV/
-env/
-
-# --- Django ---
+# Django stuff:
+*.log
+local_settings.py
 db.sqlite3
 db.sqlite3-journal
-*.log
-media/
-staticfiles/
-local_settings.py
 
-# --- IDE ---
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# Flask stuff:
+instance/
+.webassets-cache
 
-# --- OS ---
-.DS_Store
-Thumbs.db
+# Scrapy stuff:
+.scrapy
 
-# --- Jupyter Notebook ---
-.ipynb_checkpoints/
+# Sphinx documentation
+docs/_build/
 
-# --- Celery ---
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
 celerybeat-schedule
 celerybeat.pid
 
-# --- 其他 ---
-.coverage
-htmlcov/
-.pytest_cache/
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
 .mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# Node modules (frontend)
+node_modules/
+.pnpm-store/
+
+# Build output (frontend)
+dist/
+dist-ssr/
+*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Upload files
+media/
+uploads/
+
+# Static files collected
+staticfiles/
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# CI/CD
+# .github/ (Keep this directory for GitHub Actions)
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# SSH keys
+*.ssh/
+id_rsa
+id_rsa.pub
+
+# Temporary directories
+tmp/
+temp/
+.cache/

@@ -1,0 +1,15 @@
+- [x] 规则评估支持 Celery 并行分片执行
+- [x] 规则分片按 server_id 哈希分组
+- [x] 单条规则评估延迟 < 2s
+- [x] 所有 DRF API 列表接口返回分页格式
+- [x] 分页支持 page 和 page_size 参数
+- [x] 默认 page_size=20，最大 page_size=200
+- [x] 异常检测优先从 Redis 读取时序缓存
+- [x] Agent Push API 同步更新 Redis 缓存
+- [x] Redis 缓存 TTL 设置为 1 小时
+- [x] RemediationEngine 支持 Paramiko 远程执行
+- [x] RemediationEngine 支持 Docker 容器化沙箱
+- [x] 执行器可配置选择（local/paramiko/docker）
+- [x] Fernet Key 强制从环境变量读取
+- [x] 环境变量缺失时禁止启动并抛出异常
+- [x] 提供 Fernet Key 生成脚本

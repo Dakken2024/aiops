@@ -1,0 +1,13 @@
+- [x] DRF 已安装并配置认证和权限
+- [x] JWT login/refresh 接口正常工作
+- [x] monitoring、cmdb 核心模块已迁移至 DRF ViewSet
+- [x] API 版本路由 /api/v1/ 和 /api/v2/ 正常工作
+- [x] Vue3 Dashboard 组件可正常渲染 ECharts 图表
+- [x] Vue3 组件通过 DRF API 获取数据
+- [x] Django Template 与 Vue3 组件共存无冲突
+- [x] Tenant 模型支持 free/pro/enterprise 计划
+- [x] 多租户中间件正确过滤数据
+- [x] 超级管理员可跨租户查看数据
+- [x] Plugin 模型支持 collector/notifier/analyzer/reporter 类型
+- [x] 插件加载器可动态加载启用状态的插件
+- [x] 插件管理页面可在 Admin 后台操作

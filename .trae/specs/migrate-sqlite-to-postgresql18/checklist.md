@@ -1,0 +1,20 @@
+- [x] Docker Compose 包含 postgres:18-alpine 服务且可正常启动
+- [x] PostgreSQL 自动创建 aiops_db 数据库和 aiops_user 用户
+- [x] PgVector、pg_trgm、btree_gin 扩展已安装并可使用
+- [x] Django settings.py 支持从环境变量读取数据库配置
+- [x] 开发环境默认仍可使用 SQLite
+- [x] 生产环境配置指向 PostgreSQL 并启用连接优化
+- [x] requirements.txt 包含 psycopg2-binary==2.9.9
+- [x] 数据清洗脚本可清理空字符串和孤立记录
+- [x] 分批导入脚本支持断点续传
+- [x] 一键迁移脚本覆盖 dumpdata -> migrate -> loaddata -> sqlsequencereset 全流程
+- [x] 迁移后验证脚本可检查表记录数一致性
+- [x] 外键完整性验证通过（无孤立记录）
+- [x] Fernet 加密字段可正常解密（Server.password, CloudAccount.secret_key, AIModel.api_key）
+- [x] DateTimeField 带时区信息（aware datetime）
+- [x] JSONField 在 PostgreSQL 中实际存储为 JSONB
+- [x] GenericIPAddressField 在 PostgreSQL 中实际存储为 INET
+- [x] 回滚脚本可在 15 分钟内恢复至 SQLite
+- [x] 推荐索引已创建并提升查询性能
+- [x] Prometheus + Grafana 可监控 PostgreSQL 关键指标
+- [x] 告警规则覆盖连接数、慢查询、死锁场景

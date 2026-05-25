@@ -1,0 +1,14 @@
+- [x] CloudResource 模型已创建并迁移
+- [x] 阿里云 AliyunAdapter 可正常拉取 ECS 指标
+- [x] 腾讯云 TencentAdapter 可正常拉取 CVM 指标
+- [x] 云资源指标正确写入 ServerMetric（provider 字段标记）
+- [x] 混合监控仪表盘支持按云厂商/区域筛选
+- [x] DataRetentionPolicy 模型支持配置保留天数和聚合间隔
+- [x] 每日定时清理任务正常运行（删除过期原始数据）
+- [x] 聚合任务生成 5m/1h/1d 汇总数据
+- [x] WebSocket 广播间隔优化至 5s
+- [x] Redis Pub/Sub 指标变更通知正常工作
+- [x] 规则评估支持事件驱动（新指标到达立即评估）
+- [x] Agent Push API 校验 HMAC-SHA256 签名
+- [x] Agent Push API 校验 IP 白名单
+- [x] 安全校验失败返回 401/403

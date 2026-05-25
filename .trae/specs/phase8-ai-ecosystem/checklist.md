@@ -1,0 +1,15 @@
+- [x] prediction 应用支持容量预测（CPU/内存/磁盘 7天趋势）
+- [x] ARIMA/Prophet 预测任务每日自动执行
+- [x] Isolation Forest 多维异常检测正常工作
+- [x] 智能基线学习识别日/周/月周期模式
+- [x] 预测结果在 Dashboard 正确展示
+- [x] log_analysis 应用支持 Syslog 和文件日志采集
+- [x] 日志模式挖掘自动识别常见模式
+- [x] AI 日志摘要调用 LLM 生成异常描述
+- [x] 日志告警规则支持关键字和模式匹配触发
+- [x] tracing 应用支持 OpenTelemetry Span 接收
+- [x] 服务调用拓扑自动生成
+- [x] 慢接口和错误率关联到告警系统
+- [x] Webhook 出站支持告警和报告触发
+- [x] OpenAPI 文档自动生成并可通过 /api/docs/ 访问
+- [x] Webhook 失败支持重试和告警通知
