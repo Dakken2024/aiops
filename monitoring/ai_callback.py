@@ -34,28 +34,79 @@ def anomaly_ai_callback_task(self, event_id, server_id=None, metric_name='cpu_us
         if not metrics.exists():
             logger.info(f"[AICallback] 服务器{server.hostname}无最近指标数据，跳过")
             return {'error': 'no_metrics'}
+        correlation_context = None
+        try:
+            from monitoring.correlation.correlator import Correlator
+            correlation_context = Correlator.correlate_all(event)
+        except Exception as e:
+            logger.warning(f"[AIv2] 多源关联失败: {e}")
+
+        related_logs_text = ""
+        related_traces_text = ""
+        similar_cases_text = ""
+
+        if correlation_context:
+            logs = correlation_context.get('related_logs', [])
+            if logs:
+                related_logs_text = "\n## 关联日志异常 (告警前后5分钟)\n"
+                for log in logs[:10]:
+                    related_logs_text += f"- [{log.get('level','')}] {log.get('message','')[:150]}\n"
+
+            traces = correlation_context.get('related_traces', {})
+            if isinstance(traces, dict):
+                errors = traces.get('errors', [])
+                slow = traces.get('slow', [])
+                if errors or slow:
+                    related_traces_text = "\n## 关联链路异常 (告警前后5分钟)\n"
+                    for s in errors[:5]:
+                        related_traces_text += f"- [ERROR] {s.get('service_name','')} {s.get('operation','')} ({s.get('duration_ms',0)}ms) {s.get('error_message','')[:100]}\n"
+                    for s in slow[:5]:
+                        related_traces_text += f"- [SLOW] {s.get('service_name','')} {s.get('operation','')} ({s.get('duration_ms',0)}ms)\n"
+
+            cases = correlation_context.get('similar_cases', [])
+            if cases:
+                similar_cases_text = "\n## 历史相似案例\n"
+                for c in cases[:3]:
+                    similar_cases_text += f"- 案例#{c.get('id','')}: {c.get('root_cause','')[:100]} → 修复: {c.get('remediation','')[:100]} (有效性={c.get('effectiveness_score',0):.1f})\n"
+
         context = _build_diagnostic_context(server, metrics, event, metric_name)
-        analysis = _call_ai_diagnose(context)
+        analysis = _call_ai_diagnose(context, related_logs_text, related_traces_text, similar_cases_text)
         if not analysis:
             logger.warning(f"[AICallback] AI诊断返回空结果")
             return {'error': 'ai_empty_response'}
         now = timezone.now()
         detail = event.detail or {}
         detail['ai_diagnosis'] = {
-            'analysis': analysis.get('analysis', ''),
-            'suggestions': analysis.get('suggestions', []),
+            'root_cause': analysis.get('root_cause', ''),
+            'root_cause_category': analysis.get('root_cause_category', ''),
             'confidence': analysis.get('confidence', 0),
+            'impact_scope': analysis.get('impact_scope', ''),
+            'remediation_suggestion': analysis.get('remediation_suggestion', ''),
+            'remediation_command': analysis.get('remediation_command', ''),
+            'is_dangerous': analysis.get('is_dangerous', False),
+            'urgency': analysis.get('urgency', ''),
+            'reasoning': analysis.get('reasoning', ''),
             'analyzed_at': now.isoformat(),
             'model_used': analysis.get('model', 'default'),
         }
         event.detail = detail
         event.save(update_fields=['detail'])
+
+        confidence = 0.0
+        try:
+            if isinstance(analysis, dict):
+                confidence = float(analysis.get('confidence', 0.0))
+        except (ValueError, TypeError):
+            confidence = 0.0
+
         anomaly_history = AnomalyHistory.objects.filter(alert_event=event).first()
         if anomaly_history:
-            anomaly_history.ai_diagnosis = analysis.get('analysis', '')
-            anomaly_history.ai_confidence = analysis.get('confidence')
+            diagnosis_text = analysis.get('root_cause', '') or analysis.get('analysis', '')
+            anomaly_history.ai_diagnosis = diagnosis_text
+            anomaly_history.confidence = confidence
+            anomaly_history.ai_confidence = confidence
             anomaly_history.ai_analyzed_at = now
-            anomaly_history.save(update_fields=['ai_diagnosis', 'ai_confidence', 'ai_analyzed_at'])
+            anomaly_history.save(update_fields=['ai_diagnosis', 'confidence', 'ai_confidence', 'ai_analyzed_at'])
         logger.info(f"[AICallback] 事件{event_id} AI诊断完成, 置信度={analysis.get('confidence', 0)}")
         return {
             'status': 'success',
@@ -104,7 +155,7 @@ def _build_diagnostic_context(server, metrics, event, metric_name):
     return context
 
 
-def _call_ai_diagnose(context):
+def _call_ai_diagnose(context, related_logs_text="", related_traces_text="", similar_cases_text=""):
     import os
     api_key = os.environ.get('OPENAI_API_KEY', '') or os.environ.get('QWEN_API_KEY', '')
     base_url = os.environ.get('OPENAI_BASE_URL', '') or os.environ.get('QWEN_BASE_URL', 'https://dashscope.aliyuncs.com/compatible-mode/v1')
@@ -161,14 +212,21 @@ def _call_ai_diagnose(context):
 - CPU均值: {context['summary']['avg_cpu']:.1f}% | 峰值: {context['summary']['peak_cpu']:.1f}%
 - 内存均值: {context['summary']['avg_mem']:.1f}% | 峰值: {context['summary']['peak_mem']}%
 - 趋势: {'📈 持续上升' if context['summary']['trend'] == 'rising' else '➡️ 相对稳定'}
+{related_logs_text}
+{related_traces_text}
+{similar_cases_text}
 
-请以严格 JSON 格式返回（不要包含 markdown 代码块标记）：
+请输出JSON格式:
 {{
-    "analysis": "根因分析（150字以内，说明最可能的原因及推理依据）",
-    "suggestions": ["具体可操作的修复建议1", "建议2", "建议3"],
-    "confidence": 0.85,
-    "root_cause_category": "resource_exhaustion|config_error|security_incident|noise|network_issue|other",
-    "urgency": "immediate|high|medium|low"
+  "root_cause": "根因分析",
+  "root_cause_category": "分类(network/disk/memory/cpu/service/config/unknown)",
+  "confidence": 0.0,
+  "impact_scope": "影响范围评估",
+  "remediation_suggestion": "修复建议",
+  "remediation_command": "可执行的修复命令(如有)",
+  "is_dangerous": false,
+  "urgency": "high/medium/low",
+  "reasoning": "分析推理过程"
 }}"""
 
     try:

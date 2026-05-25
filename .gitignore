@@ -7,7 +7,9 @@
 .env.local
 .env.production
 .env.*.local
-
+.trae/
+.vscode/
+docs/
 # --- Python ---
 __pycache__/
 *.py[cod]

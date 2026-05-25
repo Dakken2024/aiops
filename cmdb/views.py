@@ -1246,9 +1246,41 @@ def ssl_cert_refresh(request):
     return redirect('ssl_cert_list')
 
 
+def cloud_accounts_page(request):
+    return render(request, 'monitoring/cloud_accounts.html')
+
+
+def cloud_resources_page(request):
+    return render(request, 'monitoring/cloud_resources.html')
+
+
+def log_search_page(request):
+    return render(request, 'monitoring/log_search.html')
+
+
+def trace_detail_page(request):
+    return render(request, 'monitoring/trace_detail.html')
+
+
+def case_library_page(request):
+    return render(request, 'monitoring/case_library.html')
+
+
+def webhook_endpoints_page(request):
+    return render(request, 'monitoring/webhook_endpoints.html')
+
+
+def capacity_forecast_page(request):
+    return render(request, 'monitoring/capacity_forecast.html')
+
+
+def alert_correlation_page(request):
+    return render(request, 'monitoring/alert_correlation.html')
+
+
 @login_required
 @csrf_exempt
-def ssl_config_save(request):
+def save_webhook_config(request):
     """[AJAX] 保存告警 Webhook 配置"""
     if request.method == 'POST':
         ding = request.POST.get('dingtalk_webhook', '').strip()

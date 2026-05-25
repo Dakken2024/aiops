@@ -1,0 +1,262 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">云账号管理</h3>
+                <div class="card-tools">
+                    <button class="btn btn-primary btn-sm" onclick="openCreateModal()">
+                        <i class="fas fa-plus"></i> 添加账号
+                    </button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>名称</th>
+                            <th>厂商</th>
+                            <th>AccessKey</th>
+                            <th>区域</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountTableBody">
+                        <tr><td colspan="7" class="text-center">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="accountModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加云账号</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>账号名称</label>
+                    <input type="text" class="form-control" id="fieldName" placeholder="如：生产环境主账号">
+                </div>
+                <div class="form-group">
+                    <label>云厂商</label>
+                    <select class="form-control" id="fieldType">
+                        <option value="aliyun">阿里云 (Aliyun)</option>
+                        <option value="tencent">腾讯云 (Tencent)</option>
+                        <option value="huawei">华为云 (Huawei)</option>
+                        <option value="aws">AWS</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>AccessKey ID</label>
+                    <input type="text" class="form-control" id="fieldAccessKey" placeholder="AccessKey ID">
+                </div>
+                <div class="form-group">
+                    <label>AccessKey Secret</label>
+                    <input type="password" class="form-control" id="fieldSecretKey" placeholder="AccessKey Secret">
+                </div>
+                <div class="form-group">
+                    <label>默认区域</label>
+                    <input type="text" class="form-control" id="fieldRegion" value="cn-hangzhou" placeholder="如 cn-hangzhou">
+                </div>
+                <div class="form-group">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="fieldIsActive" checked>
+                        <label class="custom-control-label" for="fieldIsActive">启用</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveAccount()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="testResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">连接测试结果</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="testResultBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var API_BASE = '/api/monitoring/cloud/accounts/';
+
+function loadAccounts() {
+    $.get(API_BASE, function(res) {
+        if (res.code !== 0) return;
+        var items = res.data.items;
+        var html = '';
+        if (!items.length) {
+            html = '<tr><td colspan="7" class="text-center text-muted">暂无云账号</td></tr>';
+        } else {
+            items.forEach(function(a) {
+                var statusBadge = a.is_active
+                    ? '<span class="badge badge-success">启用</span>'
+                    : '<span class="badge badge-secondary">禁用</span>';
+                html += '<tr>'
+                    + '<td>' + a.id + '</td>'
+                    + '<td><strong>' + escHtml(a.name) + '</strong></td>'
+                    + '<td><span class="badge badge-info">' + escHtml(a.get_type_display) + '</span></td>'
+                    + '<td><code>' + escHtml(a.access_key) + '</code></td>'
+                    + '<td>' + escHtml(a.region) + '</td>'
+                    + '<td>' + statusBadge + '</td>'
+                    + '<td>'
+                    + '<button class="btn btn-sm btn-info" onclick="testConnection(' + a.id + ')" title="测试连接"><i class="fas fa-plug"></i></button> '
+                    + '<button class="btn btn-sm btn-warning" onclick="openEditModal(' + a.id + ', \'' + escHtml(a.name) + '\', \'' + a.type + '\', \'' + escHtml(a.region) + '\', ' + a.is_active + ')" title="编辑"><i class="fas fa-edit"></i></button> '
+                    + '<button class="btn btn-sm btn-danger" onclick="deleteAccount(' + a.id + ')" title="删除"><i class="fas fa-trash"></i></button>'
+                    + '</td>'
+                    + '</tr>';
+            });
+        }
+        $('#accountTableBody').html(html);
+    });
+}
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function openCreateModal() {
+    $('#editId').val('');
+    $('#modalTitle').text('添加云账号');
+    $('#fieldName').val('');
+    $('#fieldType').val('aliyun');
+    $('#fieldAccessKey').val('');
+    $('#fieldSecretKey').val('');
+    $('#fieldRegion').val('cn-hangzhou');
+    $('#fieldIsActive').prop('checked', true);
+    $('#accountModal').modal('show');
+}
+
+function openEditModal(id, name, type, region, isActive) {
+    $('#editId').val(id);
+    $('#modalTitle').text('编辑云账号');
+    $('#fieldName').val(name);
+    $('#fieldType').val(type);
+    $('#fieldAccessKey').val('');
+    $('#fieldSecretKey').val('');
+    $('#fieldRegion').val(region);
+    $('#fieldIsActive').prop('checked', isActive);
+    $('#accountModal').modal('show');
+}
+
+function saveAccount() {
+    var editId = $('#editId').val();
+    var payload = {
+        name: $('#fieldName').val(),
+        type: $('#fieldType').val(),
+        access_key: $('#fieldAccessKey').val(),
+        secret_key: $('#fieldSecretKey').val(),
+        region: $('#fieldRegion').val(),
+        is_active: $('#fieldIsActive').is(':checked'),
+    };
+
+    if (!payload.name) { alert('请输入账号名称'); return; }
+
+    var url, method;
+    if (editId) {
+        url = API_BASE + editId + '/update/';
+        method = 'POST';
+    } else {
+        url = API_BASE + 'create/';
+        method = 'POST';
+        if (!payload.access_key) { alert('请输入 AccessKey'); return; }
+        if (!payload.secret_key) { alert('请输入 SecretKey'); return; }
+    }
+
+    $.ajax({
+        url: url, method: method,
+        contentType: 'application/json',
+        data: JSON.stringify(payload),
+        success: function(res) {
+            if (res.code === 0) {
+                $('#accountModal').modal('hide');
+                loadAccounts();
+            } else {
+                alert('保存失败: ' + (res.msg || '未知错误'));
+            }
+        },
+        error: function(xhr) {
+            alert('请求失败: ' + (xhr.responseJSON && xhr.responseJSON.msg || xhr.statusText));
+        }
+    });
+}
+
+function deleteAccount(id) {
+    if (!confirm('确认删除该云账号？')) return;
+    $.ajax({
+        url: API_BASE + id + '/delete/',
+        method: 'POST',
+        success: function(res) {
+            if (res.code === 0) loadAccounts();
+            else alert('删除失败: ' + (res.msg || ''));
+        }
+    });
+}
+
+function testConnection(id) {
+    var $btn = event.target.closest('button');
+    var origHtml = $btn.innerHTML;
+    $btn.disabled = true;
+    $btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    $.ajax({
+        url: API_BASE + id + '/test/',
+        method: 'POST',
+        success: function(res) {
+            $btn.disabled = false;
+            $btn.innerHTML = origHtml;
+            if (res.code === 0) {
+                $('#testResultBody').html(
+                    '<div class="alert alert-success"><i class="fas fa-check-circle"></i> 连接成功</div>'
+                    + '<pre class="bg-light p-2" style="max-height:300px;overflow:auto;">'
+                    + escHtml(JSON.stringify(res.data, null, 2))
+                    + '</pre>'
+                );
+            } else {
+                $('#testResultBody').html(
+                    '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> 连接失败: '
+                    + escHtml(res.msg || '未知错误') + '</div>'
+                );
+            }
+            $('#testResultModal').modal('show');
+        },
+        error: function(xhr) {
+            $btn.disabled = false;
+            $btn.innerHTML = origHtml;
+            var msg = xhr.responseJSON && xhr.responseJSON.msg || xhr.statusText;
+            $('#testResultBody').html(
+                '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> 请求失败: '
+                + escHtml(msg) + '</div>'
+            );
+            $('#testResultModal').modal('show');
+        }
+    });
+}
+
+$(function() { loadAccounts(); });
+</script>
+{% endblock %}

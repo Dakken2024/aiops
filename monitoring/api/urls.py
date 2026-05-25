@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import callback_views
 
 urlpatterns = [
     path('rules/', views.api_rules, name='api_rules'),
@@ -11,6 +12,8 @@ urlpatterns = [
     path('alerts/<int:pk>/ack/', views.api_alert_acknowledge, name='api_alert_ack'),
     path('alerts/<int:pk>/resolve/', views.api_alert_resolve, name='api_alert_resolve'),
     path('alerts/silence/', views.api_alert_silence, name='api_alert_silence'),
+    path('alerts/<int:alert_id>/comments/', views.api_alert_comments, name='api_alert_comments'),
+    path('alerts/resolve-with-reason/', views.api_alert_resolve_with_reason, name='api_alert_resolve_with_reason'),
     path('anomaly/timeline/', views.api_anomaly_timeline, name='api_anomaly_timeline'),
     path('anomaly/markpoints/', views.api_anomaly_markpoints, name='api_anomaly_markpoints'),
     path('anomaly/<int:anomaly_id>/detail/', views.api_anomaly_detail, name='api_anomaly_detail'),
@@ -25,6 +28,7 @@ urlpatterns = [
     path('runbook/feedback/', views.api_runbook_feedback, name='api_runbook_feedback'),
     path('remediation/history/', views.api_remediation_history, name='api_remediation_history'),
     path('remediation/execute/', views.api_remediation_execute, name='api_remediation_execute'),
+    path('remediation/<int:pk>/confirm/', views.api_remediation_confirm, name='api_remediation_confirm'),
     # Phase 5
     path('agent/push/', views.api_agent_push, name='api_agent_push'),
     path('agent/tokens/', views.api_agent_tokens, name='api_agent_tokens'),
@@ -40,4 +44,33 @@ urlpatterns = [
     path('dashboards/<int:dash_id>/load/', views.api_dashboard_load, name='api_dashboard_load'),
     path('dashboards/<int:dash_id>/share/', views.api_dashboard_share, name='api_dashboard_share'),
     path('dashboards/<int:dash_id>/delete/', views.api_dashboard_delete, name='api_dashboard_delete'),
+    # Phase 6: Cloud Integration
+    path('cloud/local-servers/', views.api_local_servers, name='api_local_servers'),
+    path('cloud/accounts/', views.api_cloud_accounts, name='api_cloud_accounts'),
+    path('cloud/accounts/create/', views.api_cloud_account_create, name='api_cloud_account_create'),
+    path('cloud/accounts/<int:pk>/update/', views.api_cloud_account_update, name='api_cloud_account_update'),
+    path('cloud/accounts/<int:pk>/delete/', views.api_cloud_account_delete, name='api_cloud_account_delete'),
+    path('cloud/accounts/<int:pk>/test/', views.api_cloud_account_test, name='api_cloud_account_test'),
+    path('cloud/resources/', views.api_cloud_resources, name='api_cloud_resources'),
+    path('cloud/resources/sync/', views.api_cloud_resource_sync, name='api_cloud_resource_sync'),
+    path('cloud/resources/<int:pk>/detail/', views.api_cloud_resource_detail, name='api_cloud_resource_detail'),
+    path('cloud/resources/<int:pk>/metrics/', views.api_cloud_resource_metrics, name='api_cloud_resource_metrics'),
+    path('prometheus/v1/write/', views.api_remote_write, name='api_remote_write'),
+    path('tracing/otlp/v1/traces/', views.api_otlp_traces, name='api_otlp_traces'),
+    path('logs/search/', views.api_log_search, name='api_log_search'),
+    path('logs/semantic-search/', views.api_log_semantic_search, name='api_log_semantic_search'),
+    path('traces/services/', views.api_trace_services, name='api_trace_services'),
+    path('traces/<str:trace_id>/detail/', views.api_trace_detail, name='api_trace_detail'),
+    path('cases/', views.api_case_library, name='api_case_library'),
+    path('cases/<int:pk>/feedback/', views.api_case_feedback, name='api_case_feedback'),
+    path('callback/dingtalk/', callback_views.api_dingtalk_callback, name='api_dingtalk_callback'),
+    path('callback/wecom/', callback_views.api_wecom_callback, name='api_wecom_callback'),
+    path('alerts/<int:pk>/correlation/', views.api_alert_correlation_detail, name='api_alert_correlation_detail'),
+    path('prediction/capacity/', views.api_capacity_forecast, name='api_capacity_forecast'),
+    # Webhook
+    path('webhooks/', views.api_webhook_endpoints, name='api_webhook_endpoints'),
+    path('webhooks/create/', views.api_webhook_endpoint_create, name='api_webhook_endpoint_create'),
+    path('webhooks/<int:pk>/update/', views.api_webhook_endpoint_update, name='api_webhook_endpoint_update'),
+    path('webhooks/<int:pk>/delete/', views.api_webhook_endpoint_delete, name='api_webhook_endpoint_delete'),
+    path('webhooks/<int:pk>/test/', views.api_webhook_endpoint_test, name='api_webhook_endpoint_test'),
 ]

@@ -1,0 +1,140 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:18-alpine
+    container_name: aiops_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aiops_db
+      POSTGRES_USER: aiops_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiops_user -d aiops_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aiops_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aiops_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aiops_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiops_web
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DB_ENGINE=postgresql
+      - DB_NAME=aiops_db
+      - DB_USER=aiops_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - aiops_network
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiops_celery_worker
+    restart: unless-stopped
+    command: >
+      sh -c "celery -A ops_platform worker -l info -P eventlet"
+    env_file:
+      - .env
+    environment:
+      - DB_ENGINE=postgresql
+      - DB_NAME=aiops_db
+      - DB_USER=aiops_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - aiops_network
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aiops_celery_beat
+    restart: unless-stopped
+    command: >
+      sh -c "celery -A ops_platform beat -l info"
+    env_file:
+      - .env
+    environment:
+      - DB_ENGINE=postgresql
+      - DB_NAME=aiops_db
+      - DB_USER=aiops_user
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_HOST=db
+      - DB_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    networks:
+      - aiops_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  aiops_network:
+    driver: bridge

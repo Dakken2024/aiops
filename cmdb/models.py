@@ -61,6 +61,8 @@ class CloudAccount(models.Model):
     PROVIDER_CHOICES = (
         ('aliyun', '阿里云 (Aliyun)'),
         ('tencent', '腾讯云 (Tencent)'),
+        ('huawei', '华为云 (Huawei)'),
+        ('aws', 'AWS'),
     )
 
     name = models.CharField("账号名称/别名", max_length=50, help_text="例如：生产环境主账号")
@@ -74,6 +76,9 @@ class CloudAccount(models.Model):
 
     region = models.CharField("默认区域", max_length=50, default="cn-hangzhou")
     type = models.CharField("云厂商", max_length=20, default='aliyun', choices=PROVIDER_CHOICES)
+
+    is_active = models.BooleanField("是否启用", default=True)
+    extra_config = models.JSONField("扩展配置", default=dict, help_text="华为云/AWS等额外配置")
 
     create_at = models.DateTimeField(auto_now_add=True)
 

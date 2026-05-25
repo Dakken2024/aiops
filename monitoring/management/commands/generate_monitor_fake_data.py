@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from django.contrib.auth.models import User
+from system.models import User
 
 from monitoring.models import (
     AlertRule, AlertEvent, AlertSilenceRule, NotificationLog,
@@ -25,10 +25,6 @@ class Command(BaseCommand):
             help='基础数据量倍率（默认50，表示中等规模数据集）'
         )
         parser.add_argument(
-            '--clean', action='store_true',
-            help='执行前清理已有的模拟数据（危险操作！）'
-        )
-        parser.add_argument(
             '--servers', type=int, default=0,
             help='指定生成的服务器数量（默认按count自动计算）'
         )
@@ -39,7 +35,6 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         count = options['count']
-        clean = options['clean']
         no_input = options['no_input']
         custom_servers = options['servers']
 
@@ -47,13 +42,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('  🏦  AiOps 保险金融行业模拟数据生成器'))
         self.stdout.write(self.style.NOTICE('=' * 60))
 
-        if clean:
-            if not no_input:
-                confirm = input('  ⚠️  确定要清理所有已有监控数据吗？输入 YES 确认: ')
-                if confirm != 'YES':
-                    self.stdout.write(self.style.WARNING('已取消操作。'))
-                    return
-            self._clean_data()
+        # Demo演示期：默认自动清理所有监控数据，避免重复键冲突
+        self.stdout.write('\n🧹 [自动清理] 正在清理现有监控数据...')
+        self._clean_data()
 
         server_count = custom_servers or max(8, min(count // 6, 25))
 
@@ -77,6 +68,7 @@ class Command(BaseCommand):
             detector_configs = self._generate_detector_configs(stats)
             anomaly_histories = self._generate_anomaly_histories(servers, count, now, stats)
             alert_events = self._generate_alert_events(servers, alert_rules, count, now, stats)
+            alert_comments = self._generate_alert_comments(alert_events, count, stats)
             health_scores = self._generate_health_scores(servers, count, now, stats)
             notification_logs = self._generate_notification_logs(alert_events, count, stats)
             silence_rules = self._generate_silence_rules(servers, stats)
@@ -603,11 +595,141 @@ class Command(BaseCommand):
                 acknowledged_at=acknowledged_at,
                 notification_log=notification_log_entry
             )
+
+            if status == 'resolved':
+                resolve_reasons = ['auto_recovered', 'manual_fixed', 'false_positive',
+                                   'known_issue', 'maintenance', 'ignored', 'other']
+                reason_weights = [20, 35, 15, 12, 8, 5, 5]
+                reason = random.choices(resolve_reasons, weights=reason_weights)[0]
+
+                resolve_comments = {
+                    'auto_recovered': [
+                        '系统负载自动回落至正常水平',
+                        '业务高峰结束后资源使用率恢复正常',
+                        '网络抖动已自动恢复',
+                    ],
+                    'manual_fixed': [
+                        '重启相关服务后恢复正常',
+                        '清理日志文件释放磁盘空间',
+                        '调整线程池配置解决阻塞问题',
+                        '扩容后端实例完成流量分担',
+                        '优化慢查询SQL后性能恢复',
+                    ],
+                    'false_positive': [
+                        '经排查为误报，实际业务运行正常',
+                        '阈值设置过于敏感，建议调整',
+                        '计划内维护期间产生的告警，可忽略',
+                    ],
+                    'known_issue': [
+                        '已知问题，已在迭代计划中排期修复',
+                        '历史遗留问题，影响范围有限',
+                        '等待上游依赖方修复中',
+                    ],
+                    'maintenance': [
+                        '计划内版本升级维护窗口',
+                        '数据库定期维护操作',
+                        '安全补丁部署维护',
+                    ],
+                    'ignored': [
+                        '非核心业务组件，暂不处理',
+                        '监控指标波动在可接受范围内',
+                        '测试环境告警，无需关注',
+                    ],
+                    'other': [
+                        '其他原因导致告警关闭',
+                        '综合评估后决定暂时忽略',
+                    ],
+                }
+                event.resolve_reason = reason
+                event.resolve_comment = random.choice(resolve_comments.get(reason, ['']))
+                try:
+                    from system.models import User
+                    user = User.objects.filter(is_superuser=True).first()
+                    if user:
+                        event.resolved_by = user
+                except Exception:
+                    pass
+                event.save()
+
             events.append(event)
 
         stats['alert_events'] = len(events)
         self.stdout.write(self.style.SUCCESS(f'   ✓ 已生成 {len(events)} 条告警事件'))
         return events
+
+    def _generate_alert_comments(self, alert_events, count, stats):
+        self.stdout.write('💬 [5.5/17] 生成告警评论...')
+
+        from monitoring.models import AlertComment
+        comment_templates = {
+            'text': [
+                '已关注此告警，正在排查中',
+                '初步判断为业务高峰期正常波动，继续观察',
+                '需要协调DBA一起排查数据库连接池问题',
+                '该告警与今日版本发布相关，已通知开发团队',
+                '经检查发现是定时任务资源占用过高',
+                '建议调整告警阈值以减少误报',
+                '已添加到监控白名单，后续观察',
+            ],
+            'status_change': [
+                '状态变更为已确认，分配给值班人员处理',
+                '升级为P0级别，通知相关负责人',
+                '将告警转至二线支持团队处理',
+            ],
+            'resolve': [
+                '问题已解决，关闭告警',
+                '根因定位完成：应用内存泄漏导致，已修复上线',
+                '临时方案已实施，根本修复排期中',
+            ],
+            'internal': [
+                '内部备注：该服务器近期频繁出现类似问题',
+                '注意：客户反馈页面响应缓慢可能与此相关',
+                'SLA风险提示：已接近响应时间上限',
+            ],
+        }
+
+        comments = []
+        resolved_events = [e for e in alert_events if e.status == 'resolved']
+        firing_events = [e for e in alert_events if e.status == 'firing']
+
+        for event in random.sample(resolved_events, min(len(resolved_events), len(resolved_events) * 3 // 5)):
+            num_comments = random.randint(1, 3)
+            for _ in range(num_comments):
+                comment_type = random.choice(['text', 'status_change', 'resolve', 'internal'])
+                content = random.choice(comment_templates.get(comment_type, comment_templates['text']))
+                try:
+                    from system.models import User
+                    user = User.objects.filter(is_superuser=True).first()
+                    comment = AlertComment.objects.create(
+                        alert_event=event,
+                        author=user,
+                        comment_type=comment_type,
+                        content=content,
+                        is_internal=(comment_type == 'internal'),
+                    )
+                    comments.append(comment)
+                except Exception:
+                    pass
+
+        for event in random.sample(firing_events, min(len(firing_events), len(firing_events) // 4)):
+            try:
+                from system.models import User
+                user = User.objects.filter(is_superuser=True).first()
+                if user:
+                    comment = AlertComment.objects.create(
+                        alert_event=event,
+                        author=user,
+                        comment_type='text',
+                        content=random.choice(comment_templates['text']),
+                        is_internal=False,
+                    )
+                    comments.append(comment)
+            except Exception:
+                pass
+
+        stats['alert_comments'] = len(comments)
+        self.stdout.write(self.style.SUCCESS(f'   ✓ 已生成 {len(comments)} 条告警评论'))
+        return comments
 
     def _generate_health_scores(self, servers, count, now, stats):
         self.stdout.write('💚 [6/17] 生成健康评分记录...')
@@ -1645,10 +1767,32 @@ kubectl logs <pod-name> --previous | tail -100
             }
         ]
 
+        # 获取或创建默认用户作为仪表盘所有者（必须有有效用户）
+        user = None
         try:
-            user = User.objects.first()
-        except Exception:
-            user = None
+            user = User.objects.filter(is_superuser=True).first()
+            if not user:
+                user = User.objects.first()
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f'   ⚠️  查询用户失败: {e}'))
+
+        # 如果没有用户，必须创建一个
+        if not user:
+            try:
+                user = User.objects.create_superuser(
+                    username='admin',
+                    email='admin@example.com',
+                    password='admin123'
+                )
+                self.stdout.write(self.style.WARNING('   ⚠️  已创建默认管理员用户 (admin/admin123)'))
+            except Exception as e:
+                # 如果创建失败（如用户名已存在），尝试获取该用户
+                try:
+                    user = User.objects.get(username='admin')
+                    self.stdout.write(self.style.WARNING('   ⚠️  使用已存在的admin用户'))
+                except Exception as e2:
+                    self.stdout.write(self.style.ERROR(f'   ❌ 无法获取或创建用户: {e}, {e2}'))
+                    raise Exception('SavedDashboard需要有效的owner用户，但无法获取或创建用户')
 
         dashboards = []
         for config in dashboard_configs:
@@ -1694,6 +1838,6 @@ kubectl logs <pod-name> --previous | tail -100
 
         self.stdout.write('\n💡 使用提示:')
         self.stdout.write('   • 访问 /monitoring/admin/ 查看生成的模拟数据')
-        self.stdout.write('   • 使用 --clean 参数可重置测试环境')
+        self.stdout.write('   • 每次执行会自动清理旧数据，无需手动操作')
         self.stdout.write('   • 使用 --count=100 可生成更大规模数据集')
         self.stdout.write('   • 所有数据均为模拟生成，仅供开发测试使用\n')

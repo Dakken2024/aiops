@@ -81,12 +81,14 @@ INSTALLED_APPS = [
     # 第三方库
     'channels',  # WebSocket
     'fernet_fields',  # 字段加密
+    'drf_spectacular',
     # 自定义应用
     'system',  # 用户、角色、仪表盘、系统设置
     'cmdb',  # 服务器、WebSSH、审计、Agent、云同步
     'ai_ops',  # AI 对话、诊断、模型管理
     'script_manager',  # 脚本库、批量执行
     'k8s_manager',  # K8s 多集群管理
+    'pgvector',
     'monitoring',  # 智能监控告警 (Phase 1 新增)
 ]
 
@@ -147,21 +149,21 @@ ASGI_APPLICATION = 'ops_platform.asgi.application'
 #    }
 #}
 
-# === 3. 数据库配置 (支持 SQLite / PostgreSQL 18 双模式) ===
+# === 3. 数据库配置 (支持 SQLite / PostgreSQL 双模式) ===
 # 环境变量 DB_ENGINE=postgresql 时使用 PostgreSQL，否则默认 SQLite
-_DB_ENGINE = os.environ.get('DB_ENGINE', '').lower()
+_DB_ENGINE = os.environ.get('DB_ENGINE', 'django.db.backends.sqlite3').lower()
 
-if _DB_ENGINE == 'postgresql':
+if _DB_ENGINE == 'postgresql' or _DB_ENGINE == 'django.db.backends.postgresql':
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.postgresql',
             'NAME': os.environ.get('DB_NAME', 'aiops_db'),
             'USER': os.environ.get('DB_USER', 'postgres'),
-            'PASSWORD': os.environ.get('DB_PASSWORD', '123456'),
+            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
             'HOST': os.environ.get('DB_HOST', 'localhost'),
             'PORT': os.environ.get('DB_PORT', '5432'),
             'OPTIONS': {
-                'options': '-c statement_timeout=30000 -c lock_timeout=5000'
+                'options': '-c statement_timeout=30000'
             },
             'CONN_MAX_AGE': 60,
             'CONN_HEALTH_CHECKS': True,
@@ -175,7 +177,7 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
+            'NAME': os.environ.get('DB_NAME', BASE_DIR / 'db.sqlite3'),
         }
     }
 # === 4. Channels 配置 (WebSocket) ===
@@ -203,7 +205,7 @@ CHANNEL_LAYERS = {
         },
     },
 }
-CELERY_BROKER_URL = REDIS_URL_CELERY_BROKER
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', REDIS_URL_CELERY_BROKER)
 CELERY_RESULT_BACKEND = REDIS_URL_CELERY_RESULT
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
@@ -248,10 +250,49 @@ CELERY_BEAT_SCHEDULE = {
         # 每天早上 9 点执行
         'schedule': crontab(hour=9, minute=0),
     },
-    'broadcast-metrics-every-30s': {
+    'broadcast-metrics-every-5s': {
         'task': 'monitoring.tasks.broadcast_metrics',
-        'schedule': 30.0,
+        'schedule': 5.0,
     },
+    'data-retention-cleanup-daily': {
+        'task': 'monitoring.tasks.data_retention_cleanup',
+        'schedule': crontab(hour=2, minute=0),
+    },
+    'cloud-metrics-sync-every-5min': {
+        'task': 'monitoring.tasks.cloud_metrics_sync',
+        'schedule': 300.0,
+    },
+    'cloud-resources-sync-every-1h': {
+        'task': 'monitoring.tasks.cloud_resources_sync',
+        'schedule': crontab(minute=10),
+    },
+    'collect-server-logs-every-5min': {
+        'task': 'monitoring.tasks.collect_server_logs',
+        'schedule': 300.0,
+    },
+    'generate-log-vectors-every-10min': {
+        'task': 'monitoring.tasks.generate_log_vectors',
+        'schedule': 600.0,
+    },
+    'mine-log-patterns-every-30min': {
+        'task': 'monitoring.tasks.mine_log_patterns',
+        'schedule': 1800.0,
+    },
+    'predict-capacity-daily': {
+        'task': 'monitoring.tasks.predict_capacity',
+        'schedule': crontab(hour=3, minute=0),
+    },
+    'learn-baselines-daily': {
+        'task': 'monitoring.tasks.learn_baselines',
+        'schedule': crontab(hour=1, minute=0),
+    },
+}
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'AiOps API',
+    'DESCRIPTION': 'AI 驱动运维自愈引擎 API 文档',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 # === 9. 默认主键类型 ===
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

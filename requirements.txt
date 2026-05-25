@@ -5,6 +5,7 @@ asgiref==3.11.0
 celery==5.6.0
 channels==3.0.4
 channels-redis>=4.2.0
+daphne>=3.0,<4
 Django
 django_fernet_fields_v2==0.9
 kubernetes==34.1.0
@@ -28,4 +29,10 @@ python-dotenv>=1.0.0
 
 # === PostgreSQL 18 迁移依赖 (Phase: DB Migration) ===
 psycopg2-binary==2.9.9
-# pgvector==0.2.4  # Django ORM 集成 (启用AI知识库时安装)
+pgvector>=0.3.0
+django-pgvector>=0.2.0
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+# === Prometheus RemoteWrite 可选依赖 ===
+# python-snappy  # 可选: 用于解压 Prometheus RemoteWrite snappy 编码数据
+drf-spectacular>=0.27.0

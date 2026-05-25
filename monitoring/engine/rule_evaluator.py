@@ -39,6 +39,26 @@ class RuleEvaluator:
                 results['errors'].append({'rule_id':rule.id,'error':str(e)})
         return results
 
+    @classmethod
+    def evaluate_rules_for_server(cls, server_id):
+        results = {'evaluated': 0, 'fired': 0, 'errors': []}
+        rules = AlertRule.objects.filter(
+            status='enabled'
+        ).filter(
+            dj_models.Q(target_all=True) | dj_models.Q(target_servers__id=server_id) | dj_models.Q(target_groups__id__in=[])
+        ).distinct()
+        for rule in rules:
+            try:
+                evaluator = cls(rule)
+                fired, _ = evaluator.evaluate(server_id=server_id)
+                results['evaluated'] += 1
+                if fired:
+                    results['fired'] += 1
+            except Exception as e:
+                logger.error(f"[RuleEngine] 服务器{server_id}规则{rule.id}异常: {e}")
+                results['errors'].append({'rule_id': rule.id, 'error': str(e)})
+        return results
+
     def __init__(self, rule):
         self.rule = rule
         self.condition = rule.condition_config or {}
@@ -118,6 +138,23 @@ class RuleEvaluator:
             on_alert_fired.delay(event.id)
         except Exception as e:
             logger.error(f"[RuleEngine] 升级调度失败: {e}")
+
+        try:
+            from monitoring.notification.webhook_sender import dispatch_webhooks
+            alert_data = {
+                'alert_id': event.id,
+                'rule_name': self.rule.name,
+                'severity': event.severity,
+                'server_hostname': server.hostname if server else '',
+                'metric_name': event.metric_name,
+                'current_value': event.current_value,
+                'threshold_value': event.threshold_value,
+                'message': event.message,
+                'fired_at': event.fired_at.isoformat(),
+            }
+            dispatch_webhooks('alert.fired', alert_data)
+        except Exception as e:
+            logger.error(f"[RuleEngine] Webhook推送失败: {e}")
 
         if result.get('triggered') and self.rule.rule_type == 'anomaly':
             from monitoring.ai_callback import anomaly_ai_callback_task
@@ -215,18 +252,49 @@ def _eval_threshold(self, s):
 
 @RuleEvaluator.register('baseline')
 def _eval_baseline(self, s):
-    hrs = self.condition.get('lookback_hours',168)
-    mul = self.condition.get('multiplier',1.5)
-    field = METRIC_FIELD_MAP.get(self.rule.metric_name,'cpu_usage')
+    from monitoring.baseline.smart_baseline import SmartBaselineLearner
+
+    now = timezone.now()
+    hour = now.hour
+    weekday = now.weekday()
+
+    smart_baseline = SmartBaselineLearner.get_baseline(
+        server_id=s.id,
+        metric_name=self.rule.metric_name,
+        hour=hour,
+        weekday=weekday,
+    )
+
+    if smart_baseline is not None:
+        upper = smart_baseline['upper']
+        lower = smart_baseline['lower']
+        cv, _ = self._latest(s)
+        if cv is None:
+            return {'triggered': False}
+        triggered = cv > upper or cv < lower
+        return {
+            'triggered': triggered,
+            'current_value': round(cv, 2),
+            'baseline': round(smart_baseline['avg'], 2),
+            'upper': round(upper, 2),
+            'lower': round(lower, 2),
+            'baseline_source': 'smart',
+        }
+
+    hrs = self.condition.get('lookback_hours', 168)
+    mul = self.condition.get('multiplier', 1.5)
+    field = METRIC_FIELD_MAP.get(self.rule.metric_name, 'cpu_usage')
     from cmdb.models import ServerMetric
     qs = ServerMetric.objects.filter(server=s,
-        created_at__range=(timezone.now()-timedelta(hours=hrs),timezone.now()))
-    vals = [getattr(m,field) for m in qs]
-    if len(vals)<10: return {'triggered':False,'reason':f'history({len(vals)})'}
-    base = statistics.mean(vals)*mul
-    cv,_ = self._latest(s)
-    if cv is None: return {'triggered':False}
-    return {'triggered':cv>base,'current_value':round(cv,2),'baseline':round(base,2)}
+        created_at__range=(timezone.now() - timedelta(hours=hrs), timezone.now()))
+    vals = [getattr(m, field) for m in qs]
+    if len(vals) < 10:
+        return {'triggered': False, 'reason': f'history({len(vals)})'}
+    base = statistics.mean(vals) * mul
+    cv, _ = self._latest(s)
+    if cv is None:
+        return {'triggered': False}
+    return {'triggered': cv > base, 'current_value': round(cv, 2), 'baseline': round(base, 2), 'baseline_source': 'dynamic'}
 
 @RuleEvaluator.register('trend')
 def _eval_trend(self, s):

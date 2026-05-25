@@ -1,5 +1,7 @@
 import logging
 import secrets
+import hmac
+import hashlib
 from datetime import datetime
 from django.utils import timezone
 
@@ -10,6 +12,24 @@ logger = logging.getLogger(__name__)
 
 def generate_token():
     return secrets.token_urlsafe(48)
+
+
+def verify_signature(token, timestamp, body, signature):
+    if not timestamp or not signature:
+        return False
+    try:
+        ts = int(timestamp)
+        now_ts = int(timezone.now().timestamp())
+        if abs(now_ts - ts) > 300:
+            return False
+    except (ValueError, TypeError):
+        return False
+    expected = hmac.new(
+        token.encode('utf-8'),
+        f'{timestamp}.{body}'.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
 
 
 class AgentPushHandler:
@@ -75,6 +95,12 @@ class AgentPushHandler:
         agent_token.save(update_fields=['last_seen_at'])
 
         logger.info(f"[AgentPush] {agent_token.name}: accepted={accepted} errors={len(errors)}")
+        if accepted > 0 and server:
+            try:
+                from monitoring.engine.rule_evaluator import RuleEvaluator
+                RuleEvaluator.evaluate_rules_for_server(server.id)
+            except Exception as e:
+                logger.warning(f"[AgentPush] 事件驱动评估失败: {e}")
         return {'accepted': accepted, 'errors': errors}
 
     @staticmethod

@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-project-diagram mr-1"></i> 链路追踪</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label>Trace ID</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="traceIdInput" placeholder="输入 Trace ID 查询调用链...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-primary" onclick="loadTrace()"><i class="fas fa-search"></i> 查询</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">调用链瀑布图</h3>
+                <div class="card-tools">
+                    <span class="text-muted small" id="traceIdLabel"></span>
+                </div>
+            </div>
+            <div class="card-body" id="waterfallContainer">
+                <div class="text-center text-muted py-4">请输入 Trace ID 查询调用链</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">服务统计 (24h)</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover table-sm text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>服务名</th>
+                            <th>请求数</th>
+                            <th>错误数</th>
+                            <th>平均耗时</th>
+                        </tr>
+                    </thead>
+                    <tbody id="servicesTableBody">
+                        <tr><td colspan="4" class="text-center text-muted">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadServices() {
+    $.get('/api/monitoring/traces/services/', function(res) {
+        if (res.code !== 0) return;
+        var items = res.data.items;
+        var html = '';
+        if (!items.length) {
+            html = '<tr><td colspan="4" class="text-center text-muted">暂无数据</td></tr>';
+        } else {
+            items.forEach(function(s) {
+                var errBadge = s.error_count > 0 ? '<span class="badge badge-danger">' + s.error_count + '</span>' : '<span class="text-muted">0</span>';
+                html += '<tr>'
+                    + '<td><strong>' + escHtml(s.service_name) + '</strong></td>'
+                    + '<td>' + s.span_count + '</td>'
+                    + '<td>' + errBadge + '</td>'
+                    + '<td>' + s.avg_duration + ' ms</td>'
+                    + '</tr>';
+            });
+        }
+        $('#servicesTableBody').html(html);
+    });
+}
+
+function loadTrace() {
+    var traceId = $('#traceIdInput').val().trim();
+    if (!traceId) { alert('请输入 Trace ID'); return; }
+
+    $.get('/api/monitoring/traces/' + encodeURIComponent(traceId) + '/detail/', function(res) {
+        if (res.code !== 0) {
+            $('#waterfallContainer').html('<div class="text-center text-danger py-4">' + escHtml(res.msg || '查询失败') + '</div>');
+            return;
+        }
+        renderWaterfall(res.data);
+    }).fail(function(xhr) {
+        var msg = xhr.responseJSON && xhr.responseJSON.msg || '请求失败';
+        $('#waterfallContainer').html('<div class="text-center text-danger py-4">' + escHtml(msg) + '</div>');
+    });
+}
+
+function renderWaterfall(data) {
+    var spans = data.spans;
+    $('#traceIdLabel').text('Trace: ' + data.trace_id);
+
+    if (!spans.length) {
+        $('#waterfallContainer').html('<div class="text-center text-muted py-4">未找到 Span 数据</div>');
+        return;
+    }
+
+    var minTime = null;
+    var maxTime = null;
+    spans.forEach(function(s) {
+        var t = new Date(s.start_time).getTime();
+        if (minTime === null || t < minTime) minTime = t;
+        var end = t + s.duration_ms;
+        if (maxTime === null || end > maxTime) maxTime = end;
+    });
+
+    var totalDuration = maxTime - minTime || 1;
+
+    var spanMap = {};
+    spans.forEach(function(s) { spanMap[s.span_id] = s; });
+
+    var maxDepth = 0;
+    function getDepth(spanId, visited) {
+        if (!spanId || !spanMap[spanId]) return 0;
+        if (visited.has(spanId)) return 0;
+        visited.add(spanId);
+        return getDepth(spanMap[spanId].parent_span_id, visited) + 1;
+    }
+    spans.forEach(function(s) {
+        var d = getDepth(s.span_id, new Set());
+        if (d > maxDepth) maxDepth = d;
+    });
+
+    var html = '<div style="position:relative;min-height:' + (spans.length * 40 + 60) + 'px;">';
+
+    html += '<div style="display:flex;border-bottom:1px solid #dee2e6;padding-bottom:6px;margin-bottom:8px;font-size:12px;color:#6c757d;">';
+    html += '<div style="width:250px;min-width:250px;padding-left:8px;">Span</div>';
+    html += '<div style="flex:1;position:relative;">时间轴</div>';
+    html += '</div>';
+
+    spans.forEach(function(s) {
+        var startMs = new Date(s.start_time).getTime() - minTime;
+        var leftPercent = (startMs / totalDuration * 100).toFixed(2);
+        var widthPercent = (Math.max(s.duration_ms, 1) / totalDuration * 100).toFixed(2);
+
+        var depth = getDepth(s.span_id, new Set());
+        var indent = (depth - 1) * 20;
+
+        var isError = s.status === 'ERROR';
+        var barColor = isError ? '#dc3545' : '#007bff';
+        var rowBg = isError ? 'background:#fff5f5;' : '';
+
+        var statusBadge = isError
+            ? '<span class="badge badge-danger ml-1">ERROR</span>'
+            : (s.status === 'OK' ? '<span class="badge badge-success ml-1">OK</span>' : '');
+
+        html += '<div style="display:flex;align-items:center;height:36px;' + rowBg + 'border-bottom:1px solid #f1f1f1;">';
+        html += '<div style="width:250px;min-width:250px;padding-left:' + (8 + indent) + 'px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="' + escHtml(s.service_name + ' / ' + s.operation) + '">';
+        html += '<strong>' + escHtml(s.service_name) + '</strong>';
+        html += '<span class="text-muted ml-1">' + escHtml(s.operation) + '</span>';
+        html += statusBadge;
+        html += '</div>';
+
+        html += '<div style="flex:1;position:relative;">';
+        html += '<div style="position:absolute;left:' + leftPercent + '%;width:' + widthPercent + '%;min-width:2px;height:22px;background:' + barColor + ';border-radius:3px;cursor:pointer;opacity:0.85;" title="';
+        html += escHtml(s.service_name + ' / ' + s.operation + '\\nDuration: ' + s.duration_ms + 'ms');
+        if (isError && s.error_message) html += escHtml('\\nError: ' + s.error_message);
+        html += '" data-toggle="tooltip"></div>';
+        html += '</div>';
+
+        html += '<div style="width:80px;min-width:80px;text-align:right;font-size:11px;color:#6c757d;padding-right:8px;">' + s.duration_ms + ' ms</div>';
+        html += '</div>';
+    });
+
+    html += '</div>';
+
+    if (spans.some(function(s) { return s.status === 'ERROR' && s.error_message; })) {
+        html += '<div class="mt-3"><h6 class="text-danger"><i class="fas fa-exclamation-circle"></i> 错误详情</h6>';
+        spans.forEach(function(s) {
+            if (s.status === 'ERROR' && s.error_message) {
+                html += '<div class="alert alert-danger py-1 px-2 small mb-1"><strong>' + escHtml(s.service_name) + '</strong>: ' + escHtml(s.error_message) + '</div>';
+            }
+        });
+        html += '</div>';
+    }
+
+    $('#waterfallContainer').html(html);
+    $('[data-toggle="tooltip"]').tooltip({html: true});
+}
+
+$('#traceIdInput').keypress(function(e) {
+    if (e.which === 13) loadTrace();
+});
+
+$(function() {
+    loadServices();
+});
+</script>
+{% endblock %}

@@ -113,6 +113,64 @@
             </ul>
           </li>
 
+          <li class="nav-item {% if '/monitoring/cloud/' in request.path %}menu-open{% endif %}">
+            <a href="#" class="nav-link {% if '/monitoring/cloud/' in request.path %}active{% endif %}">
+              <i class="nav-icon fas fa-cloud"></i>
+              <p>云监控 <i class="right fas fa-angle-left"></i></p>
+            </a>
+            <ul class="nav nav-treeview">
+              <li class="nav-item">
+                <a href="{% url 'cloud_accounts_page' %}" class="nav-link {% if '/monitoring/cloud/accounts/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>云账号管理</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'cloud_resources_page' %}" class="nav-link {% if '/monitoring/cloud/resources/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>云资源监控</p>
+                </a>
+              </li>
+            </ul>
+          </li>
+
+          <li class="nav-item {% if '/logs/search/' in request.path or '/traces/detail/' in request.path or '/cases/' in request.path or '/alerts/correlation/' in request.path or '/webhooks/' in request.path %}menu-open{% endif %}">
+            <a href="#" class="nav-link {% if '/logs/search/' in request.path or '/traces/detail/' in request.path or '/cases/' in request.path or '/alerts/correlation/' in request.path or '/webhooks/' in request.path %}active{% endif %}">
+              <i class="nav-icon fas fa-brain"></i>
+              <p>智能分析 <i class="right fas fa-angle-left"></i></p>
+            </a>
+            <ul class="nav nav-treeview">
+              <li class="nav-item">
+                <a href="{% url 'log_search_page' %}" class="nav-link {% if '/logs/search/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>日志搜索</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'trace_detail_page' %}" class="nav-link {% if '/traces/detail/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>链路追踪</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'case_library_page' %}" class="nav-link {% if '/cases/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>案例库</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'webhook_endpoints_page' %}" class="nav-link {% if '/webhooks/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>Webhook管理</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'capacity_forecast_page' %}" class="nav-link {% if '/capacity/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>容量预测</p>
+                </a>
+              </li>
+              <li class="nav-item">
+                <a href="{% url 'alert_correlation_page' %}" class="nav-link {% if '/alerts/correlation/' in request.path %}active{% endif %}">
+                  <i class="far fa-circle nav-icon"></i><p>多源关联分析</p>
+                </a>
+              </li>
+            </ul>
+          </li>
+
           <li class="nav-item {% if '/k8s/' in request.path %}menu-open{% endif %}">
             <a href="#" class="nav-link {% if '/k8s/' in request.path %}active{% endif %}">
                 <i class="nav-icon fas fa-cubes"></i>

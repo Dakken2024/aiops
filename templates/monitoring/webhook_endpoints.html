@@ -1,0 +1,302 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Webhook 端点管理</h3>
+                <div class="card-tools">
+                    <button class="btn btn-primary btn-sm" onclick="openCreateModal()">
+                        <i class="fas fa-plus"></i> 添加端点
+                    </button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>名称</th>
+                            <th>URL</th>
+                            <th>订阅事件</th>
+                            <th>状态</th>
+                            <th>最后发送</th>
+                            <th>最后状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="endpointTableBody">
+                        <tr><td colspan="8" class="text-center">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="endpointModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加 Webhook 端点</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                <div class="form-group">
+                    <label>名称</label>
+                    <input type="text" class="form-control" id="fieldName" placeholder="如：告警通知服务">
+                </div>
+                <div class="form-group">
+                    <label>URL</label>
+                    <input type="url" class="form-control" id="fieldUrl" placeholder="https://example.com/webhook">
+                </div>
+                <div class="form-group">
+                    <label>签名密钥 (Secret)</label>
+                    <input type="text" class="form-control" id="fieldSecret" placeholder="可选，用于 HMAC-SHA256 签名">
+                </div>
+                <div class="form-group">
+                    <label>订阅事件</label>
+                    <div class="row ml-1">
+                        <div class="custom-control custom-checkbox mr-3">
+                            <input type="checkbox" class="custom-control-input event-cb" id="evt_alert_fired" value="alert.fired" checked>
+                            <label class="custom-control-label" for="evt_alert_fired">alert.fired</label>
+                        </div>
+                        <div class="custom-control custom-checkbox mr-3">
+                            <input type="checkbox" class="custom-control-input event-cb" id="evt_alert_resolved" value="alert.resolved">
+                            <label class="custom-control-label" for="evt_alert_resolved">alert.resolved</label>
+                        </div>
+                        <div class="custom-control custom-checkbox mr-3">
+                            <input type="checkbox" class="custom-control-input event-cb" id="evt_remediation_success" value="remediation.success">
+                            <label class="custom-control-label" for="evt_remediation_success">remediation.success</label>
+                        </div>
+                        <div class="custom-control custom-checkbox mr-3">
+                            <input type="checkbox" class="custom-control-input event-cb" id="evt_remediation_failed" value="remediation.failed">
+                            <label class="custom-control-label" for="evt_remediation_failed">remediation.failed</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="custom-control custom-switch">
+                        <input type="checkbox" class="custom-control-input" id="fieldIsActive" checked>
+                        <label class="custom-control-label" for="fieldIsActive">启用</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveEndpoint()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="testResultModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Webhook 测试结果</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body" id="testResultBody"></div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var API_BASE = '/api/monitoring/webhooks/';
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadEndpoints() {
+    $.get(API_BASE, function(res) {
+        if (res.code !== 0) return;
+        var items = res.data.items;
+        var html = '';
+        if (!items.length) {
+            html = '<tr><td colspan="8" class="text-center text-muted">暂无 Webhook 端点</td></tr>';
+        } else {
+            items.forEach(function(e) {
+                var statusBadge = e.is_active
+                    ? '<span class="badge badge-success">启用</span>'
+                    : '<span class="badge badge-secondary">禁用</span>';
+                var eventsHtml = (e.events || []).map(function(ev) {
+                    return '<span class="badge badge-info mr-1">' + escHtml(ev) + '</span>';
+                }).join('');
+                var lastSent = e.last_sent_at ? e.last_sent_at.substring(0, 19).replace('T', ' ') : '-';
+                var lastStatusBadge = '';
+                if (e.last_status === 'error' || (e.last_status && e.last_status.startsWith('error'))) {
+                    lastStatusBadge = '<span class="badge badge-danger">' + escHtml(e.last_status) + '</span>';
+                } else if (e.last_status) {
+                    lastStatusBadge = '<span class="badge badge-success">' + escHtml(e.last_status) + '</span>';
+                } else {
+                    lastStatusBadge = '-';
+                }
+                html += '<tr>'
+                    + '<td>' + e.id + '</td>'
+                    + '<td><strong>' + escHtml(e.name) + '</strong></td>'
+                    + '<td><code style="font-size:12px;">' + escHtml(e.url) + '</code></td>'
+                    + '<td>' + eventsHtml + '</td>'
+                    + '<td>' + statusBadge + '</td>'
+                    + '<td>' + lastSent + '</td>'
+                    + '<td>' + lastStatusBadge + '</td>'
+                    + '<td>'
+                    + '<button class="btn btn-sm btn-info" onclick="testEndpoint(' + e.id + ')" title="测试"><i class="fas fa-paper-plane"></i></button> '
+                    + '<button class="btn btn-sm btn-warning" onclick="openEditModal(' + e.id + ')" title="编辑"><i class="fas fa-edit"></i></button> '
+                    + '<button class="btn btn-sm btn-danger" onclick="deleteEndpoint(' + e.id + ')" title="删除"><i class="fas fa-trash"></i></button>'
+                    + '</td>'
+                    + '</tr>';
+            });
+        }
+        $('#endpointTableBody').html(html);
+    });
+}
+
+function getSelectedEvents() {
+    var events = [];
+    $('.event-cb:checked').each(function() { events.push($(this).val()); });
+    return events;
+}
+
+function setEvents(events) {
+    $('.event-cb').prop('checked', false);
+    (events || []).forEach(function(ev) {
+        $('.event-cb[value="' + ev + '"]').prop('checked', true);
+    });
+}
+
+function openCreateModal() {
+    $('#editId').val('');
+    $('#modalTitle').text('添加 Webhook 端点');
+    $('#fieldName').val('');
+    $('#fieldUrl').val('');
+    $('#fieldSecret').val('');
+    setEvents(['alert.fired']);
+    $('#fieldIsActive').prop('checked', true);
+    $('#endpointModal').modal('show');
+}
+
+function openEditModal(id) {
+    $.get(API_BASE, function(res) {
+        if (res.code !== 0) return;
+        var item = res.data.items.find(function(i) { return i.id === id; });
+        if (!item) return;
+        $('#editId').val(id);
+        $('#modalTitle').text('编辑 Webhook 端点');
+        $('#fieldName').val(item.name);
+        $('#fieldUrl').val(item.url);
+        $('#fieldSecret').val('');
+        setEvents(item.events);
+        $('#fieldIsActive').prop('checked', item.is_active);
+        $('#endpointModal').modal('show');
+    });
+}
+
+function saveEndpoint() {
+    var editId = $('#editId').val();
+    var payload = {
+        name: $('#fieldName').val(),
+        url: $('#fieldUrl').val(),
+        secret: $('#fieldSecret').val(),
+        events: getSelectedEvents(),
+        is_active: $('#fieldIsActive').is(':checked'),
+    };
+
+    if (!payload.name) { alert('请输入名称'); return; }
+    if (!payload.url) { alert('请输入 URL'); return; }
+    if (!payload.events.length) { alert('请至少选择一个事件'); return; }
+
+    var url;
+    if (editId) {
+        url = API_BASE + editId + '/update/';
+    } else {
+        url = API_BASE + 'create/';
+    }
+
+    $.ajax({
+        url: url, method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(payload),
+        success: function(res) {
+            if (res.code === 0) {
+                $('#endpointModal').modal('hide');
+                loadEndpoints();
+            } else {
+                alert('保存失败: ' + (res.msg || '未知错误'));
+            }
+        },
+        error: function(xhr) {
+            alert('请求失败: ' + (xhr.responseJSON && xhr.responseJSON.msg || xhr.statusText));
+        }
+    });
+}
+
+function deleteEndpoint(id) {
+    if (!confirm('确认删除该 Webhook 端点？')) return;
+    $.ajax({
+        url: API_BASE + id + '/delete/',
+        method: 'POST',
+        success: function(res) {
+            if (res.code === 0) loadEndpoints();
+            else alert('删除失败: ' + (res.msg || ''));
+        }
+    });
+}
+
+function testEndpoint(id) {
+    var $btn = event.target.closest('button');
+    var origHtml = $btn.innerHTML;
+    $btn.disabled = true;
+    $btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    $.ajax({
+        url: API_BASE + id + '/test/',
+        method: 'POST',
+        success: function(res) {
+            $btn.disabled = false;
+            $btn.innerHTML = origHtml;
+            if (res.code === 0) {
+                var d = res.data;
+                var alertClass = d.success ? 'alert-success' : 'alert-danger';
+                var icon = d.success ? 'fa-check-circle' : 'fa-times-circle';
+                var label = d.success ? '发送成功' : '发送失败';
+                $('#testResultBody').html(
+                    '<div class="alert ' + alertClass + '"><i class="fas ' + icon + '"></i> ' + label + '</div>'
+                    + '<table class="table table-sm">'
+                    + '<tr><td>HTTP 状态码</td><td>' + d.status_code + '</td></tr>'
+                    + '<tr><td>端点状态</td><td>' + escHtml(d.last_status) + '</td></tr>'
+                    + '</table>'
+                );
+            } else {
+                $('#testResultBody').html(
+                    '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> 测试失败: '
+                    + escHtml(res.msg || '未知错误') + '</div>'
+                );
+            }
+            $('#testResultModal').modal('show');
+        },
+        error: function(xhr) {
+            $btn.disabled = false;
+            $btn.innerHTML = origHtml;
+            var msg = xhr.responseJSON && xhr.responseJSON.msg || xhr.statusText;
+            $('#testResultBody').html(
+                '<div class="alert alert-danger"><i class="fas fa-times-circle"></i> 请求失败: '
+                + escHtml(msg) + '</div>'
+            );
+            $('#testResultModal').modal('show');
+        }
+    });
+}
+
+$(function() { loadEndpoints(); });
+</script>
+{% endblock %}

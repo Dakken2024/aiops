@@ -11,7 +11,7 @@ from django.utils.timezone import now as tz_now
 logger = logging.getLogger(__name__)
 
 from .models import (
-    AlertRule, AlertEvent, AlertSilenceRule, NotificationLog, DetectorConfig,
+    AlertRule, AlertEvent, AlertComment, AlertSilenceRule, NotificationLog, DetectorConfig,
     AnomalyHistory, AlertGroup, AlertCorrelationRule, RemediationAction,
     RemediationHistory, RunbookEntry, AgentToken, EscalationPolicy,
     ServiceTopology, SavedDashboard, HealthScore,
@@ -235,7 +235,7 @@ class MonitoringAdminSite(admin.AdminSite):
         anomaly_method_stats = []
         try:
             from monitoring.models import AnomalyHistory as AH
-            method_counts = AH.objects.values('detection_method').annotate(
+            method_counts = AH.objects.values('method_used').annotate(
                 count=Count('id')
             ).order_by('-count')[:8]
             
@@ -248,7 +248,7 @@ class MonitoringAdminSite(admin.AdminSite):
             total_anomalies = sum(m['count'] for m in method_counts)
             
             for mc in method_counts:
-                method = mc['detection_method']
+                method = mc['method_used']
                 icon, label = method_icons.get(method, ('🔍', method))
                 pct = round(mc['count'] / total_anomalies * 100) if total_anomalies > 0 else 0
                 anomaly_method_stats.append({
@@ -473,16 +473,28 @@ class RemediationHistoryInline(admin.TabularInline):
         return False
 
 
+class AlertCommentInline(admin.TabularInline):
+    model = AlertComment
+    extra = 1
+    fields = ['author', 'comment_type', 'content', 'is_internal']
+    readonly_fields = []
+
+    def get_formset(self, request, obj=None, **kwargs):
+        kwargs['initial'] = [{'author': request.user.pk}]
+        return super().get_formset(request, obj, **kwargs)
+
+
 @admin.register(AlertEvent, site=monitoring_admin_site)
 class AlertEventAdmin(ExportMixin, admin.ModelAdmin):
     list_display = ['id', 'rule_link', 'server_link', 'severity_badge',
-                    'status_tag', 'current_value', 'duration_human', 'fired_at']
-    list_filter = ['status', 'severity', 'rule__rule_type', 'metric_name']
-    search_fields = ['message', 'server__hostname', 'rule__name']
+                    'status_tag', 'resolve_reason_badge', 'comment_count_badge',
+                    'current_value', 'duration_human', 'fired_at']
+    list_filter = ['status', 'severity', 'rule__rule_type', 'metric_name', 'resolve_reason']
+    search_fields = ['message', 'server__hostname', 'rule__name', 'resolve_comment']
     readonly_fields = ['fired_at', 'resolved_at', 'notification_log', 'detail_json']
     date_hierarchy = 'fired_at'
-    actions = ['export_as_csv', 'export_as_excel', 'batch_acknowledge', 'batch_resolve']
-    inlines = [RemediationHistoryInline]
+    actions = ['export_as_csv', 'export_as_excel', 'batch_acknowledge', 'batch_resolve_with_reason']
+    inlines = [RemediationHistoryInline, AlertCommentInline]
 
     def has_add_permission(self, request):
         return False
@@ -548,14 +560,61 @@ class AlertEventAdmin(ExportMixin, admin.ModelAdmin):
         self.message_user(request, f'✅ 已成功确认 {updated} 条告警事件')
     batch_acknowledge.short_description = '👁 批量确认告警'
 
-    def batch_resolve(self, request, queryset):
+    def batch_resolve_with_reason(self, request, queryset):
         from django.utils import timezone
-        updated = queryset.exclude(status='resolved').update(
-            status='resolved',
-            resolved_at=timezone.now()
-        )
-        self.message_user(request, f'✅ 已成功解决 {updated} 条告警事件')
-    batch_resolve.short_description = '✅ 批量解决告警'
+        from django.contrib import messages
+
+        if 'apply' in request.POST:
+            reason = request.POST.get('resolve_reason', '')
+            comment = request.POST.get('resolve_comment', '')
+            updated = queryset.exclude(status='resolved').update(
+                status='resolved',
+                resolved_at=timezone.now(),
+                resolved_by_id=request.user.pk,
+                resolve_reason=reason or None,
+                resolve_comment=comment or ''
+            )
+            reason_labels = dict(AlertEvent.RESOLVE_REASON_CHOICES)
+            self.message_user(request,
+                f'✅ 已解决 {updated} 条告警 (原因: {reason_labels.get(reason, "未指定")})')
+            return None
+        from django.shortcuts import render
+        context = {
+            'title': '批量解决告警 - 选择关闭原因',
+            'queryset': queryset,
+            'action_checkbox_name': admin.helpers.ACTION_CHECKBOX_NAME,
+            'reason_choices': AlertEvent.RESOLVE_REASON_CHOICES,
+        }
+        return render(request, 'admin/monitoring/batch_resolve.html', context)
+    batch_resolve_with_reason.short_description = '✅ 批量解决告警(填写原因)'
+
+    def resolve_reason_badge(self, obj):
+        if not obj.resolve_reason:
+            return '-'
+        config = {
+            'auto_recovered': ('#52c41a', '自动恢复'),
+            'manual_fixed': ('#1890ff', '手动修复'),
+            'false_positive': ('#999', '误报'),
+            'known_issue': ('#faad14', '已知问题'),
+            'maintenance': ('#722ed1', '维护中'),
+            'ignored': ('#999', '忽略'),
+            'other': ('#666', '其他'),
+        }
+        color, label = config.get(obj.resolve_reason, ('#666', obj.resolve_reason))
+        return format_html('<span style="background:{};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">{}</span>',
+                           color, label)
+    resolve_reason_badge.short_description = '关闭原因'
+    resolve_reason_badge.admin_order_field = 'resolve_reason'
+
+    def comment_count_badge(self, obj):
+        count = obj.comment_count
+        if count == 0:
+            return format_html('<span style="color:#999">💬 0</span>')
+        elif count <= 3:
+            return format_html('<span style="color:#1890ff">💬 {}</span>', count)
+        else:
+            return format_html('<span style="color:#ff4d4f;font-weight:bold">💬 {}</span>', count)
+    comment_count_badge.short_description = '评论数'
 
 
 # ============================================================
@@ -581,6 +640,55 @@ class AlertSilenceRuleAdmin(admin.ModelAdmin):
     def comment_short(self, obj):
         return (obj.comment or '')[:50]
     comment_short.short_description = '备注'
+
+
+@admin.register(AlertComment, site=monitoring_admin_site)
+class AlertCommentAdmin(admin.ModelAdmin):
+    list_display = ['alert_event_link', 'author_link', 'comment_type_badge',
+                    'content_preview', 'is_internal_badge', 'created_at']
+    list_filter = ['comment_type', 'is_internal', 'created_at']
+    search_fields = ['content', 'alert_event__message']
+    readonly_fields = ['created_at', 'alert_event_link']
+    date_hierarchy = 'created_at'
+
+    def has_add_permission(self, request):
+        return True
+
+    def alert_event_link(self, obj):
+        url = f'/monitoring/admin/monitoring/alertevent/{obj.alert_event_id}/change/'
+        return format_html('<a href="{}">#{}</a>', url, obj.alert_event_id)
+    alert_event_link.short_description = '告警'
+
+    def author_link(self, obj):
+        if obj.author:
+            url = f'/admin/auth/user/{obj.author_id}/change/'
+            return format_html('<a href="{}">{}</a>', url, obj.author.username)
+        return '-'
+    author_link.short_description = '作者'
+
+    def comment_type_badge(self, obj):
+        config = {
+            'text': ('#1890ff', '评论'),
+            'status_change': ('#faad14', '状态变更'),
+            'resolve': ('#52c41a', '解决'),
+            'escalate': ('#ff4d4f', '升级'),
+            'internal': ('#999', '内部'),
+        }
+        color, label = config.get(obj.comment_type, ('#666', obj.comment_type))
+        return format_html('<span style="background:{};color:#fff;padding:2px 8px;border-radius:10px;font-size:11px">{}</span>',
+                           color, label)
+    comment_type_badge.short_description = '类型'
+
+    def content_preview(self, obj):
+        text = (obj.content or '')[:60] + '...' if len(obj.content or '') > 60 else (obj.content or '-')
+        return text
+    content_preview.short_description = '内容'
+
+    def is_internal_badge(self, obj):
+        if obj.is_internal:
+            return format_html('<span style="color:#faad14">🔒 内部</span>')
+        return format_html('<span style="color:#52c41a">🌐 公开</span>')
+    is_internal_badge.short_description = '可见性'
 
 
 @admin.register(NotificationLog, site=monitoring_admin_site)
@@ -717,21 +825,23 @@ class AnomalyHistoryAdmin(ExportMixin, admin.ModelAdmin):
         score = obj.anomaly_score or 0
         width = min(score * 100, 100)
         color = '#ff4d4f' if score > 0.8 else '#faad14' if score > 0.5 else '#52c41a'
+        score_str = f"{score:.2f}"
         return format_html('''
             <div style="width:80px;background:#f0f0f0;border-radius:4px;position:relative;height:16px">
             <div style="width:{}%;background:{};border-radius:4px;height:100%"></div>
-            <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px">{:.2f}</span>
+            <span style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:10px">{}</span>
             </div>
-        ''', width, color, score)
+        ''', width, color, score_str)
     anomaly_score_bar.short_description = '异常分数'
     anomaly_score_bar.admin_order_field = 'anomaly_score'
 
     def ai_status(self, obj):
         if obj.ai_diagnosis:
             conf = obj.ai_confidence or 0
-            return format_html('<span title="{}">🤖 {:.0%}</span>',
-                              obj.ai_diagnosis[:50], conf)
-        return format_html('<span style="color:#999">⬜ 未分析</span>')
+            conf_str = f"{conf:.0%}"
+            return format_html('<span title="{}">🤖 {}</span>',
+                              obj.ai_diagnosis[:50], conf_str)
+        return format_html('<span style="color:#999">{}</span>', '⬜ 未分析')
     ai_status.short_description = 'AI诊断'
 
     def batch_request_ai_analysis(self, request, queryset):
@@ -855,8 +965,8 @@ class RemediationActionAdmin(admin.ModelAdmin):
 
     def dangerous_tag(self, obj):
         if obj.is_dangerous:
-            return format_html('<span style="color:#ff4d4f;font-weight:bold">☠️ 危险</span>')
-        return format_html('<span style="color:#52c41a">✅ 安全</span>')
+            return format_html('<span style="color:#ff4d4f;font-weight:bold">{}</span>', '☠️ 危险')
+        return format_html('<span style="color:#52c41a">{}</span>', '✅ 安全')
     dangerous_tag.short_description = '安全等级'
 
     def timeout_format(self, obj):
@@ -946,9 +1056,8 @@ class RunbookEntryAdmin(ExportMixin, admin.ModelAdmin):
         tags = obj.tag_list
         if not tags:
             return '-'
-        return format_html('{}'.format(
-            ' '.join([f'<span style="background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:11px;margin:1px">{t}</span>' for t in tags[:4]])
-        ))
+        html_tags = ' '.join([f'<span style="background:#f0f0f0;padding:1px 6px;border-radius:3px;font-size:11px;margin:1px">{t}</span>' for t in tags[:4]])
+        return format_html('{}', html_tags)
     tags_list.short_description = '标签'
     tags_list.allow_tags = True
 
@@ -983,10 +1092,10 @@ class AgentTokenAdmin(admin.ModelAdmin):
 
     def is_alive(self, obj):
         if not obj.last_seen_at:
-            return format_html('<span style="color:#999">从未连接</span>')
+            return format_html('<span style="color:#999">{}</span>', '从未连接')
         if obj.last_seen_at and (tz_now() - obj.last_seen_at) < timedelta(minutes=5):
-            return format_html('<span style="color:#52c41a;font-weight:bold">● 在线</span>')
-        return format_html('<span style="color:#ff4d4f">● 离线</span>')
+            return format_html('<span style="color:#52c41a;font-weight:bold">{}</span>', '● 在线')
+        return format_html('<span style="color:#ff4d4f">{}</span>', '● 离线')
     is_alive.short_description = '状态'
 
     def last_seen_ago(self, obj):
@@ -1156,13 +1265,14 @@ class HealthScoreAdmin(ExportMixin, admin.ModelAdmin):
             color = '#faad14'
         else:
             color = '#ff4d4f'
+        score_str = f"{score:.0f}"
         return format_html('''
             <div style="width:60px;text-align:center">
-            <div style="font-size:14px;font-weight:bold;color:{}">{:.0f}</div>
+            <div style="font-size:14px;font-weight:bold;color:{}">{}</div>
             <div style="height:4px;background:#f0f0f0;border-radius:2px;margin-top:2px">
             <div style="width:{}%;height:100%;background:{};border-radius:2px"></div>
             </div></div>
-        ''', color, score, score, color)
+        ''', color, score_str, score, color)
     overall_score_gauge.short_description = '总分'
     overall_score_gauge.admin_order_field = 'overall_score'
 
@@ -1193,10 +1303,11 @@ class HealthScoreAdmin(ExportMixin, admin.ModelAdmin):
     def _score_bar(self, score):
         s = score or 0
         color = '#52c41a' if s >= 80 else '#faad14' if s >= 50 else '#ff4d4f'
-        return format_html('<div style="width:50px"><div style="font-size:11px;text-align:right">{:.0f}</div>'
+        score_str = f"{s:.0f}"
+        return format_html('<div style="width:50px"><div style="font-size:11px;text-align:right">{}</div>'
                           '<div style="height:6px;background:#f0f0f0;border-radius:3px">'
                           '<div style="width:{}%;height:100%;background:{};border-radius:3px"></div></div></div>',
-                          s, s, color)
+                          score_str, s, color)
 
     def trigger_rescan(self, request, queryset):
         from monitoring.health.scorer import HealthScorer

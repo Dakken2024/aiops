@@ -136,3 +136,117 @@ class Correlator:
                 } for e in sorted(cluster, key=lambda x: x.fired_at)],
             })
         return results
+
+    @classmethod
+    def correlate_metrics_logs(cls, alert_event, window_minutes=5):
+        from monitoring.models import LogEntry
+
+        if not alert_event.server:
+            return []
+
+        since = alert_event.fired_at - timedelta(minutes=window_minutes)
+        until = alert_event.fired_at + timedelta(minutes=window_minutes)
+
+        return list(LogEntry.objects.filter(
+            server=alert_event.server,
+            timestamp__gte=since,
+            timestamp__lte=until,
+            level__in=('ERROR', 'WARN', 'CRIT', 'ALERT', 'EMERG'),
+        ).order_by('-timestamp').values('timestamp', 'level', 'source', 'message')[:20])
+
+    @classmethod
+    def correlate_metrics_traces(cls, alert_event, window_minutes=5):
+        from monitoring.models import TraceSpan
+
+        if not alert_event.server:
+            return []
+
+        since = alert_event.fired_at - timedelta(minutes=window_minutes)
+        until = alert_event.fired_at + timedelta(minutes=window_minutes)
+
+        error_spans = list(TraceSpan.objects.filter(
+            server=alert_event.server,
+            start_time__gte=since,
+            start_time__lte=until,
+            status='ERROR',
+        ).order_by('-duration_ms').values(
+            'trace_id', 'service_name', 'operation', 'duration_ms', 'error_message'
+        )[:10])
+
+        slow_threshold = 3000
+        slow_spans = list(TraceSpan.objects.filter(
+            server=alert_event.server,
+            start_time__gte=since,
+            start_time__lte=until,
+            duration_ms__gte=slow_threshold,
+        ).exclude(status='ERROR').order_by('-duration_ms').values(
+            'trace_id', 'service_name', 'operation', 'duration_ms'
+        )[:10])
+
+        return {'errors': error_spans, 'slow': slow_spans}
+
+    @classmethod
+    def find_similar_cases(cls, alert_event, top_k=3):
+        from monitoring.models import CaseVector
+
+        symptoms_text = cls._build_symptoms_text(alert_event)
+
+        try:
+            from monitoring.embedding.service import EmbeddingService
+            service = EmbeddingService()
+            query_vector = service.embed_text(symptoms_text)
+
+            if query_vector:
+                try:
+                    from pgvector.django import L2Distance
+                    cases = list(CaseVector.objects.annotate(
+                        distance=L2Distance('symptom_vector', query_vector)
+                    ).filter(distance__lt=1.0).order_by('distance')[:top_k].values(
+                        'id', 'title', 'root_cause', 'remediation',
+                        'confidence', 'effectiveness_score', 'usage_count', 'distance'
+                    ))
+                    return cases
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        return list(CaseVector.objects.filter(
+            effectiveness_score__gte=0.5,
+        ).order_by('-effectiveness_score')[:top_k].values(
+            'id', 'title', 'root_cause', 'remediation',
+            'confidence', 'effectiveness_score', 'usage_count'
+        ))
+
+    @classmethod
+    def correlate_all(cls, alert_event):
+        logs = cls.correlate_metrics_logs(alert_event)
+        traces = cls.correlate_metrics_traces(alert_event)
+        cases = cls.find_similar_cases(alert_event)
+
+        return {
+            'alert_id': alert_event.id,
+            'server': alert_event.server.hostname if alert_event.server else None,
+            'metric_name': alert_event.metric_name,
+            'fired_at': alert_event.fired_at.isoformat(),
+            'related_logs': logs,
+            'related_traces': traces,
+            'similar_cases': cases,
+            'logs_count': len(logs),
+            'trace_errors': len(traces.get('errors', [])) if isinstance(traces, dict) else 0,
+            'trace_slow': len(traces.get('slow', [])) if isinstance(traces, dict) else 0,
+            'cases_count': len(cases),
+        }
+
+    @staticmethod
+    def _build_symptoms_text(alert_event):
+        parts = []
+        if alert_event.server:
+            parts.append(f"服务器{alert_event.server.hostname}")
+        if alert_event.metric_name:
+            parts.append(f"指标{alert_event.metric_name}异常")
+        if alert_event.current_value:
+            parts.append(f"当前值{alert_event.current_value}")
+        if alert_event.severity:
+            parts.append(f"严重程度{alert_event.severity}")
+        return ' '.join(parts) if parts else '未知异常'

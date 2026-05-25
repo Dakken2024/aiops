@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-book mr-1"></i> 案例库</h3>
+                <div class="card-tools">
+                    <span class="text-muted small" id="caseCount">0 个案例</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">ID</th>
+                            <th>标题</th>
+                            <th>根因</th>
+                            <th>修复方式</th>
+                            <th style="width:80px;">置信度</th>
+                            <th style="width:160px;">有效性评分</th>
+                            <th style="width:60px;">使用次数</th>
+                            <th style="width:140px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="caseTableBody">
+                        <tr><td colspan="8" class="text-center text-muted">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer clearfix">
+                <ul class="pagination pagination-sm m-0 float-right" id="pagination"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentPage = 1;
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getScoreColor(score) {
+    if (score >= 0.8) return 'success';
+    if (score >= 0.5) return 'warning';
+    return 'danger';
+}
+
+function loadCases(page) {
+    page = page || 1;
+    currentPage = page;
+    $.get('/api/monitoring/cases/', {page: page, page_size: 15}, function(res) {
+        if (res.code !== 0) return;
+        renderCases(res.data.items, res.data);
+    });
+}
+
+function renderCases(items, data) {
+    $('#caseCount').text((data.total || 0) + ' 个案例');
+    var html = '';
+    if (!items.length) {
+        html = '<tr><td colspan="8" class="text-center text-muted">暂无案例</td></tr>';
+    } else {
+        items.forEach(function(c) {
+            var scorePercent = Math.round(c.effectiveness_score * 100);
+            var scoreColor = getScoreColor(c.effectiveness_score);
+            var confPercent = Math.round(c.confidence * 100);
+
+            html += '<tr>'
+                + '<td>' + c.id + '</td>'
+                + '<td><strong>' + escHtml(c.title) + '</strong></td>'
+                + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(c.root_cause) + '">' + escHtml(c.root_cause) + '</td>'
+                + '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(c.remediation) + '">' + escHtml(c.remediation) + '</td>'
+                + '<td><span class="badge badge-info">' + confPercent + '%</span></td>'
+                + '<td>'
+                + '<div class="progress" style="height:20px;min-width:120px;">'
+                + '<div class="progress-bar bg-' + scoreColor + '" role="progressbar" style="width:' + scorePercent + '%" aria-valuenow="' + scorePercent + '" aria-valuemin="0" aria-valuemax="100">'
+                + scorePercent + '%'
+                + '</div></div>'
+                + '</td>'
+                + '<td>' + c.usage_count + '</td>'
+                + '<td>'
+                + '<button class="btn btn-success btn-xs" onclick="feedback(' + c.id + ', true)" title="有效"><i class="fas fa-thumbs-up"></i></button> '
+                + '<button class="btn btn-danger btn-xs" onclick="feedback(' + c.id + ', false)" title="无效"><i class="fas fa-thumbs-down"></i></button>'
+                + '</td>'
+                + '</tr>';
+        });
+    }
+    $('#caseTableBody').html(html);
+    renderPagination(data);
+}
+
+function renderPagination(data) {
+    if (!data.total || data.total <= data.page_size) {
+        $('#pagination').html('');
+        return;
+    }
+    var totalPages = Math.ceil(data.total / data.page_size);
+    var html = '';
+    if (data.page > 1) {
+        html += '<li class="page-item"><a class="page-link" href="#" onclick="loadCases(' + (data.page - 1) + ');return false;">&laquo;</a></li>';
+    }
+    var start = Math.max(1, data.page - 2);
+    var end = Math.min(totalPages, data.page + 2);
+    for (var i = start; i <= end; i++) {
+        html += '<li class="page-item ' + (i === data.page ? 'active' : '') + '"><a class="page-link" href="#" onclick="loadCases(' + i + ');return false;">' + i + '</a></li>';
+    }
+    if (data.page < totalPages) {
+        html += '<li class="page-item"><a class="page-link" href="#" onclick="loadCases(' + (data.page + 1) + ');return false;">&raquo;</a></li>';
+    }
+    $('#pagination').html(html);
+}
+
+function feedback(caseId, effective) {
+    $.ajax({
+        url: '/api/monitoring/cases/' + caseId + '/feedback/',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({effective: effective}),
+        success: function(res) {
+            if (res.code === 0) {
+                loadCases(currentPage);
+            } else {
+                alert('反馈失败: ' + (res.msg || ''));
+            }
+        },
+        error: function(xhr) {
+            alert('请求失败');
+        }
+    });
+}
+
+$(function() {
+    loadCases();
+});
+</script>
+{% endblock %}

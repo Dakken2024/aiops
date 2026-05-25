@@ -1,0 +1,256 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-search mr-1"></i> 日志搜索</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="form-group">
+                            <label>搜索模式</label>
+                            <div class="btn-group btn-group-toggle w-100" data-toggle="buttons">
+                                <label class="btn btn-primary active" id="modeKeyword">
+                                    <input type="radio" name="searchMode" value="keyword" checked> 关键字搜索
+                                </label>
+                                <label class="btn btn-info" id="modeSemantic">
+                                    <input type="radio" name="searchMode" value="semantic"> 语义搜索
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="form-group">
+                            <label>查询内容</label>
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="searchQuery" placeholder="输入关键字或自然语言描述...">
+                                <div class="input-group-append">
+                                    <button class="btn btn-primary" onclick="doSearch()"><i class="fas fa-search"></i> 搜索</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>时间范围</label>
+                            <select class="form-control" id="sinceRange">
+                                <option value="1h">最近 1 小时</option>
+                                <option value="6h">最近 6 小时</option>
+                                <option value="24h" selected>最近 24 小时</option>
+                                <option value="7d">最近 7 天</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>日志级别</label>
+                            <select class="form-control" id="levelFilter">
+                                <option value="">全部</option>
+                                <option value="DEBUG">DEBUG</option>
+                                <option value="INFO">INFO</option>
+                                <option value="WARNING">WARNING</option>
+                                <option value="ERROR">ERROR</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>服务器</label>
+                            <select class="form-control" id="serverFilter">
+                                <option value="">全部服务器</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">搜索结果 <span class="badge badge-secondary" id="resultCount">0</span></h3>
+                <div class="card-tools">
+                    <span class="text-muted small" id="searchModeLabel">关键字搜索</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>时间</th>
+                            <th>级别</th>
+                            <th>服务器</th>
+                            <th>来源</th>
+                            <th>消息内容</th>
+                            <th>异常</th>
+                            <th id="distanceCol" style="display:none;">相似度</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logTableBody">
+                        <tr><td colspan="7" class="text-center text-muted">请输入搜索条件后点击搜索</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer clearfix">
+                <ul class="pagination pagination-sm m-0 float-right" id="pagination"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var currentPage = 1;
+var searchMode = 'keyword';
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadServers() {
+    $.get('/api/monitoring/cloud/local-servers/', function(res) {
+        if (res.code !== 0) return;
+        var html = '<option value="">全部服务器</option>';
+        res.data.items.forEach(function(s) {
+            html += '<option value="' + s.id + '">' + escHtml(s.hostname) + ' (' + escHtml(s.ip_address) + ')</option>';
+        });
+        $('#serverFilter').html(html);
+    });
+}
+
+function getLevelBadge(level) {
+    var map = {
+        'DEBUG': 'badge-secondary',
+        'INFO': 'badge-info',
+        'WARNING': 'badge-warning',
+        'ERROR': 'badge-danger',
+        'CRITICAL': 'badge-danger'
+    };
+    return '<span class="badge ' + (map[level] || 'badge-secondary') + '">' + escHtml(level) + '</span>';
+}
+
+function doSearch(page) {
+    page = page || 1;
+    var q = $('#searchQuery').val().trim();
+    var since = $('#sinceRange').val();
+    var level = $('#levelFilter').val();
+    var serverId = $('#serverFilter').val();
+
+    searchMode = $('input[name="searchMode"]:checked').val();
+
+    if (searchMode === 'semantic') {
+        $('#distanceCol').show();
+        $('#searchModeLabel').text('语义搜索');
+        if (!q) { alert('语义搜索需要输入查询文本'); return; }
+        $.get('/api/monitoring/logs/semantic-search/', {q: q}, function(res) {
+            if (res.code !== 0) {
+                $('#logTableBody').html('<tr><td colspan="7" class="text-center text-danger">' + escHtml(res.msg || '搜索失败') + '</td></tr>');
+                return;
+            }
+            renderSemanticResults(res.data.items);
+        }).fail(function(xhr) {
+            var msg = xhr.responseJSON && xhr.responseJSON.msg || '请求失败';
+            $('#logTableBody').html('<tr><td colspan="7" class="text-center text-danger">' + escHtml(msg) + '</td></tr>');
+        });
+    } else {
+        $('#distanceCol').hide();
+        $('#searchModeLabel').text('关键字搜索');
+        var params = {page: page, page_size: 20};
+        if (q) params.q = q;
+        if (since) params.since = since;
+        if (level) params.level = level;
+        if (serverId) params.server_id = serverId;
+
+        $.get('/api/monitoring/logs/search/', params, function(res) {
+            if (res.code !== 0) return;
+            renderKeywordResults(res.data.items, res.data);
+        });
+    }
+}
+
+function renderKeywordResults(items, data) {
+    $('#resultCount').text(data.total || items.length);
+    var html = '';
+    if (!items.length) {
+        html = '<tr><td colspan="7" class="text-center text-muted">暂无匹配日志</td></tr>';
+    } else {
+        items.forEach(function(e) {
+            var anomalyBadge = e.is_anomaly ? '<span class="badge badge-warning"><i class="fas fa-exclamation-triangle"></i></span>' : '';
+            html += '<tr>'
+                + '<td class="small">' + escHtml(e.timestamp ? e.timestamp.replace('T', ' ').substring(0, 19) : '') + '</td>'
+                + '<td>' + getLevelBadge(e.level) + '</td>'
+                + '<td>' + escHtml(e.server) + '</td>'
+                + '<td>' + escHtml(e.source) + '</td>'
+                + '<td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(e.message) + '">' + escHtml(e.message) + '</td>'
+                + '<td>' + anomalyBadge + '</td>'
+                + '</tr>';
+        });
+    }
+    $('#logTableBody').html(html);
+    renderPagination(data);
+}
+
+function renderSemanticResults(items) {
+    $('#resultCount').text(items.length);
+    var html = '';
+    if (!items.length) {
+        html = '<tr><td colspan="7" class="text-center text-muted">暂无匹配日志</td></tr>';
+    } else {
+        items.forEach(function(e) {
+            var distColor = e.distance < 0.5 ? 'success' : (e.distance < 1.0 ? 'warning' : 'danger');
+            html += '<tr>'
+                + '<td class="small">' + escHtml(e.timestamp ? e.timestamp.replace('T', ' ').substring(0, 19) : '') + '</td>'
+                + '<td>' + getLevelBadge(e.level) + '</td>'
+                + '<td>' + escHtml(e.server) + '</td>'
+                + '<td>' + escHtml(e.source) + '</td>'
+                + '<td style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(e.message) + '">' + escHtml(e.message) + '</td>'
+                + '<td>-</td>'
+                + '<td><span class="badge badge-' + distColor + '">' + e.distance + '</span></td>'
+                + '</tr>';
+        });
+    }
+    $('#logTableBody').html(html);
+    $('#pagination').html('');
+}
+
+function renderPagination(data) {
+    if (!data.total || data.total <= data.page_size) {
+        $('#pagination').html('');
+        return;
+    }
+    var totalPages = Math.ceil(data.total / data.page_size);
+    var html = '';
+    if (data.page > 1) {
+        html += '<li class="page-item"><a class="page-link" href="#" onclick="doSearch(' + (data.page - 1) + ');return false;">&laquo;</a></li>';
+    }
+    var start = Math.max(1, data.page - 2);
+    var end = Math.min(totalPages, data.page + 2);
+    for (var i = start; i <= end; i++) {
+        html += '<li class="page-item ' + (i === data.page ? 'active' : '') + '"><a class="page-link" href="#" onclick="doSearch(' + i + ');return false;">' + i + '</a></li>';
+    }
+    if (data.page < totalPages) {
+        html += '<li class="page-item"><a class="page-link" href="#" onclick="doSearch(' + (data.page + 1) + ');return false;">&raquo;</a></li>';
+    }
+    $('#pagination').html(html);
+}
+
+$('#searchQuery').keypress(function(e) {
+    if (e.which === 13) doSearch();
+});
+
+$(function() {
+    loadServers();
+});
+</script>
+{% endblock %}

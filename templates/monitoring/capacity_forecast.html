@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line mr-1"></i> 容量预测</h3>
+                <div class="card-tools">
+                    <button class="btn btn-primary btn-sm" onclick="loadForecast()"><i class="fas fa-sync-alt mr-1"></i>刷新</button>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap">
+                    <thead>
+                        <tr>
+                            <th>服务器</th>
+                            <th>IP地址</th>
+                            <th>指标</th>
+                            <th>当前值(%)</th>
+                            <th>日增长率</th>
+                            <th>预计满载日期</th>
+                            <th>剩余天数</th>
+                            <th>风险等级</th>
+                        </tr>
+                    </thead>
+                    <tbody id="forecastTableBody">
+                        <tr><td colspan="8" class="text-center text-muted">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getMetricLabel(m) {
+    var map = {'disk_usage':'磁盘使用率','mem_usage':'内存使用率','cpu_usage':'CPU使用率'};
+    return map[m] || m;
+}
+
+function loadForecast() {
+    $('#forecastTableBody').html('<tr><td colspan="8" class="text-center text-muted">加载中...</td></tr>');
+    $.get('/api/monitoring/prediction/capacity/', function(res) {
+        if (res.code !== 0) return;
+        renderForecast(res.data.items || []);
+    });
+}
+
+function renderForecast(items) {
+    var html = '';
+    if (!items.length) {
+        html = '<tr><td colspan="8" class="text-center text-muted">暂无预测数据</td></tr>';
+    } else {
+        items.forEach(function(item) {
+            var isCritical = item.days_remaining !== null && item.days_remaining <= 7;
+            var rowClass = isCritical ? 'table-danger' : '';
+            var riskBadge = '';
+            if (item.days_remaining === null || item.days_remaining === undefined) {
+                riskBadge = '<span class="badge badge-secondary">无风险</span>';
+            } else if (item.days_remaining <= 3) {
+                riskBadge = '<span class="badge badge-danger">极高风险</span>';
+            } else if (item.days_remaining <= 7) {
+                riskBadge = '<span class="badge badge-warning">高风险</span>';
+            } else if (item.days_remaining <= 30) {
+                riskBadge = '<span class="badge badge-info">需关注</span>';
+            } else {
+                riskBadge = '<span class="badge badge-success">正常</span>';
+            }
+
+            html += '<tr class="' + rowClass + '">'
+                + '<td><strong>' + escHtml(item.server_name) + '</strong></td>'
+                + '<td>' + escHtml(item.server_ip) + '</td>'
+                + '<td>' + getMetricLabel(item.metric) + '</td>'
+                + '<td>' + (item.current_value !== null ? item.current_value + '%' : '-') + '</td>'
+                + '<td>' + (item.daily_growth !== null ? item.daily_growth + '%/天' : '-') + '</td>'
+                + '<td>' + (item.predicted_full_date || '无增长趋势') + '</td>'
+                + '<td>' + (item.days_remaining !== null ? item.days_remaining + ' 天' : '-') + '</td>'
+                + '<td>' + riskBadge + '</td>'
+                + '</tr>';
+        });
+    }
+    $('#forecastTableBody').html(html);
+}
+
+$(function() {
+    loadForecast();
+});
+</script>
+{% endblock %}

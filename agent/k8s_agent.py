@@ -1,10 +1,49 @@
 # agent/k8s_agent.py
 import time, json, os, socket, psutil, subprocess
+import hmac, hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # === 配置 ===
 LISTEN_PORT = 10055  # K8s Agent 监听端口 (区分于 ECS 的 10050)
 NODE_NAME = os.getenv("NODE_NAME", socket.gethostname())
+
+
+def generate_signature(token, timestamp, body):
+    message = f'{timestamp}.{body}'
+    return hmac.new(
+        token.encode('utf-8'),
+        message.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+
+
+class PushClient:
+    def __init__(self, server_url, token):
+        self.server_url = server_url
+        self.token = token
+
+    def push(self, payload):
+        import urllib.request
+        timestamp = str(int(time.time()))
+        body_str = json.dumps(payload)
+        signature = generate_signature(self.token, timestamp, body_str)
+        headers = {
+            'Authorization': f'Bearer {self.token}',
+            'X-Timestamp': timestamp,
+            'X-Signature': signature,
+            'Content-Type': 'application/json',
+        }
+        req = urllib.request.Request(
+            self.server_url,
+            data=body_str.encode('utf-8'),
+            headers=headers,
+            method='POST'
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return json.loads(resp.read().decode('utf-8'))
+        except Exception as e:
+            return {'code': 1, 'msg': str(e)}
 
 
 def run_host_cmd(cmd):

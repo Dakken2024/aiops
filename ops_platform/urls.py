@@ -3,26 +3,23 @@ from django.urls import path,include
 from system import views
 from cmdb import views as cmdb
 from ai_ops import views as ai_ops
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
-# 导入自定义监控 Admin Site
 from monitoring.admin import monitoring_admin_site
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    # 自定义 AiOps 监控中心 Dashboard (选项 C + D)
     path('monitoring/admin/', monitoring_admin_site.urls),
     path('', views.dashboard, name='dashboard'),
     path('login/', views.login_view, name='login'),
     path('register/', views.register_view, name='register'),
     path('logout/', views.logout_view, name='logout'),
 
-    # 系统管理 - 用户
     path('sys/users/', views.user_list, name='user_list'),
     path('sys/users/toggle/<int:user_id>/', views.toggle_user_status, name='toggle_user_status'),
     path('sys/users/delete/<int:user_id>/', views.delete_user, name='delete_user'),
     path('sys/users/role/<int:user_id>/', views.user_edit_role, name='user_edit_role'),
 
-    # 系统管理 - 角色
     path('sys/roles/', views.role_list, name='role_list'),
     path('sys/roles/add/', views.role_create, name='role_create'),
     path('sys/roles/edit/<int:role_id>/', views.role_edit, name='role_edit'),
@@ -31,27 +28,20 @@ urlpatterns = [
     path('sys/settings/', views.sys_setting, name='sys_setting'),
     path('sys/users/edit/<int:user_id>/', views.user_edit, name='user_edit'),
 
-    # 密码管理
     path('sys/users/reset-pwd/<int:user_id>/', views.admin_reset_password, name='admin_reset_password'),
     path('sys/profile/change-pwd/', views.change_own_password, name='change_own_password'),
-    # CMDB - 服务器
     path('cmdb/servers/', cmdb.server_list, name='server_list'),
     path('cmdb/servers/add/', cmdb.server_add, name='server_add'),
     path('cmdb/servers/edit/<int:pk>/', cmdb.server_edit, name='server_edit'),
     path('cmdb/servers/delete/<int:pk>/', cmdb.server_delete, name='server_delete'),
     path('cmdb/servers/sync/', cmdb.sync_aliyun, name='sync_aliyun'),
     path('agent/uninstall/', cmdb.agent_uninstall, name='agent_uninstall'),
-    # CMDB - 分组 (简单路由，用于处理表单提交)
     path('cmdb/groups/add/', cmdb.group_add, name='group_add'),
-    # 账号管理
     path('cmdb/accounts/', cmdb.account_list, name='account_list'),
     path('cmdb/accounts/delete/<int:pk>/', cmdb.account_delete, name='account_delete'),
-    #webssh
     path('cmdb/ssh/<int:server_id>/', cmdb.webssh, name='webssh'),
-    #审计
     path('cmdb/logs/', cmdb.terminal_log_list, name='terminal_log_list'),
     path('cmdb/logs/<int:log_id>/', cmdb.terminal_log_detail, name='terminal_log_detail'),
-    #证书
     path('ssl/', cmdb.ssl_cert_list, name='ssl_cert_list'),
     path('ssl/add/', cmdb.ssl_cert_add, name='ssl_cert_add'),
     path('ssl/delete/<int:pk>/', cmdb.ssl_cert_delete, name='ssl_cert_delete'),
@@ -59,12 +49,9 @@ urlpatterns = [
     path('ssl/config/', cmdb.ssl_config_save, name='ssl_config_save'),
 
     path('agent/install/', cmdb.agent_install, name='agent_install'),
-    # === 新增：高危审计列表 ===
     path('audit/high-risk/', cmdb.high_risk_audit_list, name='high_risk_audit_list'),
-    # 服务器导入导出
-    path('server/export/', cmdb.server_export, name='server_export'),  # 导出
+    path('server/export/', cmdb.server_export, name='server_export'),
     path('server/import/', cmdb.server_import, name='server_import'),
-    #文件上传下载
     path('cmdb/server/upload/<int:server_id>/', cmdb.server_file_upload, name='server_file_upload'),
     path('cmdb/server/download/<int:server_id>/', cmdb.server_file_download, name='server_file_download'),
     path('server/<int:server_id>/files/',cmdb.server_file_ops,name='server_file_ops'),
@@ -74,6 +61,18 @@ urlpatterns = [
     path('ai/', include('ai_ops.urls')),
     path('script/', include('script_manager.urls')),
     path('k8s/', include('k8s_manager.urls')),
-    # === 监控告警 API (Phase 1 新增) ===
     path('api/monitoring/', include('monitoring.api.urls')),
+    path('monitoring/cloud/accounts/', cmdb.cloud_accounts_page, name='cloud_accounts_page'),
+    path('monitoring/cloud/resources/', cmdb.cloud_resources_page, name='cloud_resources_page'),
+    path('monitoring/logs/search/', cmdb.log_search_page, name='log_search_page'),
+    path('monitoring/traces/detail/', cmdb.trace_detail_page, name='trace_detail_page'),
+    path('monitoring/cases/', cmdb.case_library_page, name='case_library_page'),
+    path('monitoring/webhooks/', cmdb.webhook_endpoints_page, name='webhook_endpoints_page'),
+    path('monitoring/capacity/', cmdb.capacity_forecast_page, name='capacity_forecast_page'),
+    path('monitoring/alerts/correlation/', cmdb.alert_correlation_page, name='alert_correlation_page'),
+]
+urlpatterns += [
+    path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]

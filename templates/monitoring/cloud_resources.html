@@ -1,0 +1,362 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">云资源监控</h3>
+                <div class="card-tools">
+                    <div class="input-group input-group-sm" style="width: 420px;">
+                        <select class="form-control" id="filterSource" onchange="loadAll()">
+                            <option value="">全部来源</option>
+                            <option value="local">本地服务器</option>
+                            <option value="aliyun">阿里云</option>
+                            <option value="tencent">腾讯云</option>
+                            <option value="huawei">华为云</option>
+                            <option value="aws">AWS</option>
+                        </select>
+                        <select class="form-control" id="filterType" onchange="loadAll()">
+                            <option value="">全部类型</option>
+                            <option value="ecs">云服务器</option>
+                            <option value="rds">云数据库</option>
+                            <option value="slb">负载均衡</option>
+                            <option value="oss">对象存储</option>
+                            <option value="redis_cloud">云缓存</option>
+                            <option value="cdn">CDN</option>
+                        </select>
+                        <div class="input-group-append">
+                            <button class="btn btn-primary" onclick="syncResources()" title="手动同步">
+                                <i class="fas fa-sync-alt"></i> 同步
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="resourceGroups"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailTitle">资源详情</h5>
+                <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
+            </div>
+            <div class="modal-body">
+                <div id="detailInfo"></div>
+                <hr>
+                <div class="form-inline mb-2">
+                    <label class="mr-2"><strong>指标:</strong></label>
+                    <select class="form-control form-control-sm mr-2" id="metricSelect" onchange="loadMetrics()">
+                        <option value="cpu_usage">CPU使用率</option>
+                        <option value="mem_usage">内存使用率</option>
+                        <option value="disk_usage">磁盘使用率</option>
+                    </select>
+                    <select class="form-control form-control-sm" id="rangeSelect" onchange="loadMetrics()">
+                        <option value="1h">最近1小时</option>
+                        <option value="6h">最近6小时</option>
+                        <option value="24h" selected>最近24小时</option>
+                        <option value="7d">最近7天</option>
+                    </select>
+                </div>
+                <div id="metricsChart" style="width:100%;height:300px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+var API_BASE = '/api/monitoring/cloud/';
+var currentResourceId = null;
+var currentResourceType = 'cloud';
+var metricsChart = null;
+
+var providerLabels = {
+    'local': '本地服务器', 'aliyun': '阿里云', 'tencent': '腾讯云',
+    'huawei': '华为云', 'aws': 'AWS'
+};
+var providerColors = {
+    'local': '#28a745', 'aliyun': '#ff6a00', 'tencent': '#006eff',
+    'huawei': '#cf0a2c', 'aws': '#ff9900'
+};
+var typeLabels = {
+    'ecs': '云服务器', 'rds': '云数据库', 'slb': '负载均衡',
+    'oss': '对象存储', 'redis_cloud': '云缓存', 'cdn': 'CDN'
+};
+var typeIcons = {
+    'ecs': 'fa-server', 'rds': 'fa-database', 'slb': 'fa-balance-scale',
+    'oss': 'fa-box', 'redis_cloud': 'fa-bolt', 'cdn': 'fa-globe'
+};
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function loadAll() {
+    var sourceFilter = $('#filterSource').val();
+    var typeFilter = $('#filterType').val();
+    var pending = 0;
+    var localData = [];
+    var cloudData = [];
+
+    var needLocal = !sourceFilter || sourceFilter === 'local';
+    var needCloud = !sourceFilter || sourceFilter !== 'local';
+
+    if (needLocal && !typeFilter) {
+        pending++;
+        $.get(API_BASE + 'local-servers/', function(res) {
+            if (res.code === 0) localData = res.data.items;
+            if (--pending === 0) renderGroups(localData, cloudData);
+        });
+    }
+
+    if (needCloud) {
+        pending++;
+        var params = {};
+        if (sourceFilter && sourceFilter !== 'local') params.provider = sourceFilter;
+        if (typeFilter) params.resource_type = typeFilter;
+        $.get(API_BASE + 'resources/', params, function(res) {
+            if (res.code === 0) cloudData = res.data.items;
+            if (--pending === 0) renderGroups(localData, cloudData);
+        });
+    }
+
+    if (pending === 0) renderGroups(localData, cloudData);
+}
+
+function renderGroups(localData, cloudData) {
+    var groups = {};
+
+    if (localData.length) {
+        groups['local'] = localData.map(function(s) {
+            return {
+                id: s.id, provider: 'local', resource_type: 'local',
+                instance_id: s.ip_address, instance_name: s.hostname,
+                region: '-', is_active: true,
+                cloud_account_name: '', local_server_name: s.hostname,
+                cpu_usage: s.cpu_usage, mem_usage: s.mem_usage, disk_usage: s.disk_usage
+            };
+        });
+    }
+
+    cloudData.forEach(function(r) {
+        var key = r.provider || 'unknown';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+    });
+
+    var html = '';
+    var keys = Object.keys(groups);
+    if (!keys.length) {
+        html = '<p class="text-center text-muted">暂无资源数据，请先添加云账号并同步</p>';
+    } else {
+        keys.forEach(function(key) {
+            var label = providerLabels[key] || key;
+            var color = providerColors[key] || '#6c757d';
+            var groupItems = groups[key];
+            html += '<div class="mb-4">'
+                + '<h5><span class="badge" style="background:' + color + '"><i class="fas ' + (key === 'local' ? 'fa-hdd' : 'fa-cloud') + ' mr-1"></i>' + escHtml(label) + '</span> '
+                + '<small class="text-muted">' + groupItems.length + ' 个资源</small></h5>'
+                + '<div class="row">';
+
+            if (key === 'local') {
+                html += '<div class="col-12"><div class="table-responsive"><table class="table table-sm table-hover">'
+                    + '<thead><tr><th>主机名</th><th>IP</th><th>CPU</th><th>内存</th><th>磁盘</th><th>操作</th></tr></thead><tbody>';
+                groupItems.forEach(function(r) {
+                    var cpuBadge = metricBadge(r.cpu_usage);
+                    var memBadge = metricBadge(r.mem_usage);
+                    var diskBadge = metricBadge(r.disk_usage);
+                    html += '<tr>'
+                        + '<td><strong>' + escHtml(r.instance_name) + '</strong></td>'
+                        + '<td><code>' + escHtml(r.instance_id) + '</code></td>'
+                        + '<td>' + cpuBadge + '</td>'
+                        + '<td>' + memBadge + '</td>'
+                        + '<td>' + diskBadge + '</td>'
+                        + '<td><button class="btn btn-sm btn-outline-info" onclick="showLocalDetail(' + r.id + ')"><i class="fas fa-chart-line"></i></button></td>'
+                        + '</tr>';
+                });
+                html += '</tbody></table></div></div>';
+            } else {
+                groupItems.forEach(function(r) {
+                    var icon = typeIcons[r.resource_type] || 'fa-cloud';
+                    var typeLabel = typeLabels[r.resource_type] || r.resource_type;
+                    var statusBadge = r.is_active
+                        ? '<span class="badge badge-success">运行中</span>'
+                        : '<span class="badge badge-secondary">已停止</span>';
+                    html += '<div class="col-lg-3 col-md-4 col-sm-6 mb-2">'
+                        + '<div class="small-box" style="background:' + color + '; border-radius:6px; padding:12px; cursor:pointer;" onclick="showCloudDetail(' + r.id + ')">'
+                        + '<div class="inner">'
+                        + '<h6><i class="fas ' + icon + ' mr-1"></i>' + escHtml(r.instance_name || r.instance_id) + '</h6>'
+                        + '<p class="mb-0" style="font-size:12px;">'
+                        + '<span class="badge badge-light mr-1">' + escHtml(typeLabel) + '</span>'
+                        + statusBadge
+                        + '</p>'
+                        + '<p class="mb-0" style="font-size:11px; opacity:0.8;">'
+                        + escHtml(r.region) + ' | ' + escHtml(r.cloud_account_name)
+                        + '</p>'
+                        + '</div></div></div>';
+                });
+            }
+            html += '</div></div>';
+        });
+    }
+    $('#resourceGroups').html(html);
+}
+
+function metricBadge(val) {
+    if (val === null || val === undefined) return '<span class="text-muted">-</span>';
+    var cls = 'badge-secondary';
+    if (val >= 90) cls = 'badge-danger';
+    else if (val >= 70) cls = 'badge-warning';
+    else cls = 'badge-success';
+    return '<span class="badge ' + cls + '">' + val + '%</span>';
+}
+
+function syncResources() {
+    var $btn = $('[onclick="syncResources()"]');
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 同步中');
+    $.ajax({
+        url: API_BASE + 'resources/sync/',
+        method: 'POST',
+        success: function(res) {
+            $btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> 同步');
+            if (res.code === 0) {
+                alert('同步完成: 新增 ' + (res.data.created || 0) + ' 个, 更新 ' + (res.data.updated || 0) + ' 个');
+                loadAll();
+            } else {
+                alert('同步失败: ' + (res.msg || ''));
+            }
+        },
+        error: function() {
+            $btn.prop('disabled', false).html('<i class="fas fa-sync-alt"></i> 同步');
+            alert('同步请求失败');
+        }
+    });
+}
+
+function showLocalDetail(id) {
+    currentResourceId = id;
+    currentResourceType = 'local';
+    $.get(API_BASE + 'local-servers/', function(res) {
+        if (res.code !== 0) return;
+        var s = null;
+        res.data.items.forEach(function(item) { if (item.id === id) s = item; });
+        if (!s) { alert('未找到服务器'); return; }
+        $('#detailTitle').text(s.hostname);
+        var info = '<table class="table table-sm">'
+            + '<tr><th width="120">主机名</th><td>' + escHtml(s.hostname) + '</td></tr>'
+            + '<tr><th>IP地址</th><td>' + escHtml(s.ip_address) + '</td></tr>'
+            + '<tr><th>来源</th><td><span class="badge badge-success">本地服务器</span></td></tr>'
+            + '<tr><th>系统</th><td>' + escHtml(s.os_type || '-') + '</td></tr>'
+            + '<tr><th>CPU</th><td>' + metricBadge(s.cpu_usage) + '</td></tr>'
+            + '<tr><th>内存</th><td>' + metricBadge(s.mem_usage) + '</td></tr>'
+            + '<tr><th>磁盘</th><td>' + metricBadge(s.disk_usage) + '</td></tr>'
+            + '</table>';
+        $('#detailInfo').html(info);
+        $('#detailModal').modal('show');
+        setTimeout(function() { loadMetrics(); }, 300);
+    });
+}
+
+function showCloudDetail(id) {
+    currentResourceId = id;
+    currentResourceType = 'cloud';
+    $.get(API_BASE + 'resources/' + id + '/detail/', function(res) {
+        if (res.code !== 0) { alert('获取详情失败'); return; }
+        var r = res.data;
+        $('#detailTitle').text(r.instance_name || r.instance_id);
+        var info = '<table class="table table-sm">'
+            + '<tr><th width="120">实例ID</th><td>' + escHtml(r.instance_id) + '</td></tr>'
+            + '<tr><th>云厂商</th><td>' + escHtml(providerLabels[r.provider] || r.provider) + '</td></tr>'
+            + '<tr><th>资源类型</th><td>' + escHtml(typeLabels[r.resource_type] || r.resource_type) + '</td></tr>'
+            + '<tr><th>区域</th><td>' + escHtml(r.region) + '</td></tr>'
+            + '<tr><th>云账号</th><td>' + escHtml(r.cloud_account.name) + '</td></tr>'
+            + '<tr><th>关联服务器</th><td>' + (r.local_server ? escHtml(r.local_server.hostname) : '<span class="text-muted">未关联</span>') + '</td></tr>'
+            + '<tr><th>状态</th><td>' + (r.is_active ? '<span class="badge badge-success">运行中</span>' : '<span class="badge badge-secondary">已停止</span>') + '</td></tr>'
+            + '<tr><th>最后同步</th><td>' + (r.last_sync_at || '<span class="text-muted">从未同步</span>') + '</td></tr>';
+        if (r.extra_config && Object.keys(r.extra_config).length) {
+            info += '<tr><th>扩展配置</th><td><pre class="mb-0" style="font-size:11px;">' + escHtml(JSON.stringify(r.extra_config, null, 2)) + '</pre></td></tr>';
+        }
+        info += '</table>';
+        $('#detailInfo').html(info);
+        $('#detailModal').modal('show');
+        setTimeout(function() { loadMetrics(); }, 300);
+    });
+}
+
+function loadMetrics() {
+    if (!currentResourceId) return;
+    var metric = $('#metricSelect').val();
+    var range = $('#rangeSelect').val();
+
+    if (currentResourceType === 'local') {
+        $.get('/api/monitoring/trend/aggregated/', {
+            server_id: currentResourceId, metric: metric, range: range
+        }, function(res) {
+            if (res.code !== 0) return;
+            renderChart(res.data);
+        });
+    } else {
+        $.get(API_BASE + 'resources/' + currentResourceId + '/metrics/', {
+            metric: metric, range: range
+        }, function(res) {
+            if (res.code !== 0) return;
+            renderChart(res.data);
+        });
+    }
+}
+
+function renderChart(data) {
+    var dom = document.getElementById('metricsChart');
+    if (!metricsChart) {
+        metricsChart = echarts.init(dom);
+    }
+    var option = {
+        tooltip: { trigger: 'axis' },
+        grid: { left: 50, right: 20, top: 20, bottom: 30 },
+        xAxis: {
+            type: 'category',
+            data: data.times || [],
+            axisLabel: { fontSize: 10, rotate: (data.times || []).length > 20 ? 45 : 0 }
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { formatter: '{value}%' }
+        },
+        series: [{
+            type: 'line',
+            data: data.values || [],
+            smooth: true,
+            symbol: 'none',
+            areaStyle: { opacity: 0.15 },
+            lineStyle: { width: 2 }
+        }]
+    };
+    metricsChart.setOption(option, true);
+    metricsChart.resize();
+}
+
+$(window).on('resize', function() {
+    if (metricsChart) metricsChart.resize();
+});
+
+$('#detailModal').on('hidden.bs.modal', function() {
+    currentResourceId = null;
+    currentResourceType = 'cloud';
+});
+
+$(function() { loadAll(); });
+</script>
+{% endblock %}

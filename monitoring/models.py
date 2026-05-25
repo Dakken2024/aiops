@@ -2,6 +2,18 @@ import json
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from django.contrib.postgres.indexes import GinIndex
+
+try:
+    from pgvector.django import VectorField
+    HAS_PGVECTOR = True
+except ImportError:
+    HAS_PGVECTOR = False
+
+def _vector_field(dimensions=1536, **kwargs):
+    if HAS_PGVECTOR:
+        return VectorField(dimensions=dimensions, null=True, blank=True, **kwargs)
+    return models.TextField(null=True, blank=True, **kwargs)
 
 
 class AlertRule(models.Model):
@@ -71,6 +83,16 @@ class AlertEvent(models.Model):
         ('acknowledged', '已确认'), ('silenced', '已静默'),
     ]
 
+    RESOLVE_REASON_CHOICES = [
+        ('auto_recovered', '自动恢复'),
+        ('manual_fixed', '手动修复'),
+        ('false_positive', '误报'),
+        ('known_issue', '已知问题/暂不处理'),
+        ('maintenance', '计划内维护'),
+        ('ignored', '忽略/无需处理'),
+        ('other', '其他原因'),
+    ]
+
     rule = models.ForeignKey(AlertRule, on_delete=models.CASCADE, related_name='events')
     server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE, null=True, related_name='alert_events')
 
@@ -85,8 +107,15 @@ class AlertEvent(models.Model):
     fired_at = models.DateTimeField("触发时间", auto_now_add=True)
     resolved_at = models.DateTimeField("恢复时间", null=True, blank=True)
     acknowledged_at = models.DateTimeField("确认时间", null=True, blank=True)
-    acknowledged_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    acknowledged_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                        related_name='acknowledged_alerts')
     notification_log = models.JSONField("通知记录", default=list)
+
+    resolve_reason = models.CharField("关闭原因", max_length=30, choices=RESOLVE_REASON_CHOICES,
+                                     blank=True, null=True)
+    resolve_comment = models.TextField("处理备注", blank=True, default='')
+    resolved_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+                                    related_name='resolved_alerts')
 
     class Meta:
         ordering = ['-fired_at']
@@ -100,6 +129,36 @@ class AlertEvent(models.Model):
     def duration(self):
         end = self.resolved_at or timezone.now()
         return (end - self.fired_at).total_seconds()
+
+    @property
+    def comment_count(self):
+        return self.comments.count()
+
+
+class AlertComment(models.Model):
+    COMMENT_TYPE_CHOICES = [
+        ('text', '普通评论'),
+        ('status_change', '状态变更'),
+        ('resolve', '解决关闭'),
+        ('escalate', '升级通知'),
+        ('internal', '内部备注'),
+    ]
+
+    alert_event = models.ForeignKey(AlertEvent, on_delete=models.CASCADE, related_name='comments')
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                               related_name='alert_comments')
+    comment_type = models.CharField("评论类型", max_length=20, choices=COMMENT_TYPE_CHOICES, default='text')
+    content = models.TextField("评论内容")
+    created_at = models.DateTimeField("创建时间", auto_now_add=True)
+    is_internal = models.BooleanField("仅内部可见", default=False)
+
+    class Meta:
+        ordering = ['created_at']
+        verbose_name = "告警评论"
+        verbose_name_plural = "告警评论"
+
+    def __str__(self):
+        return f"[{self.get_comment_type_display()}] {self.content[:30]}"
 
 
 class AlertSilenceRule(models.Model):
@@ -190,6 +249,7 @@ class AnomalyHistory(models.Model):
                                        related_name='anomaly_history', verbose_name="关联告警")
 
     ai_diagnosis = models.TextField("AI诊断结论", blank=True, default='')
+    confidence = models.FloatField("AI置信度", default=0.0, null=True, blank=True)
     ai_confidence = models.FloatField("AI置信度", null=True, blank=True)
     ai_analyzed_at = models.DateTimeField("AI分析时间", null=True, blank=True)
 
@@ -295,6 +355,8 @@ class RemediationHistory(models.Model):
     finished_at = models.DateTimeField(null=True, blank=True)
     output = models.TextField(blank=True, verbose_name='执行输出')
     error_message = models.TextField(blank=True)
+    execution_mode = models.CharField("执行方式", max_length=20, default='ssh', blank=True)
+    decision_mode = models.CharField("决策模式", max_length=20, default='auto_confirm', blank=True)
 
     class Meta:
         ordering = ['-started_at']
@@ -446,3 +508,243 @@ class HealthScore(models.Model):
 
     def __str__(self):
         return f"{self.server.hostname}: {self.overall_score:.1f} ({self.grade})"
+
+
+class CloudResource(models.Model):
+    PROVIDER_CHOICES = [
+        ('aliyun', '阿里云'), ('tencent', '腾讯云'),
+        ('huawei', '华为云'), ('aws', 'AWS'),
+    ]
+    RESOURCE_TYPE_CHOICES = [
+        ('ecs', '云服务器'), ('rds', '云数据库'),
+        ('slb', '负载均衡'), ('oss', '对象存储'),
+        ('redis_cloud', '云缓存'), ('cdn', 'CDN'),
+    ]
+    provider = models.CharField("云厂商", max_length=20, choices=PROVIDER_CHOICES)
+    resource_type = models.CharField("资源类型", max_length=20, choices=RESOURCE_TYPE_CHOICES)
+    instance_id = models.CharField("实例ID", max_length=100)
+    instance_name = models.CharField("实例名称", max_length=200, default='')
+    region = models.CharField("区域", max_length=50, default='')
+    cloud_account = models.ForeignKey('cmdb.CloudAccount', on_delete=models.CASCADE,
+        related_name='cloud_resources', verbose_name="云账号")
+    local_server = models.ForeignKey('cmdb.Server', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='cloud_resource', verbose_name="关联本地服务器")
+    extra_config = models.JSONField("扩展配置", default=dict)
+    last_sync_at = models.DateTimeField("最后同步时间", null=True, blank=True)
+    is_active = models.BooleanField("是否启用", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '云资源'
+        verbose_name_plural = '云资源'
+        unique_together = ('cloud_account', 'instance_id')
+        indexes = [
+            models.Index(fields=['provider', 'resource_type']),
+            models.Index(fields=['is_active']),
+        ]
+
+    def __str__(self):
+        return f"[{self.get_provider_display()}] {self.instance_name or self.instance_id}"
+
+
+class DataRetentionPolicy(models.Model):
+    INTERVAL_CHOICES = [
+        ('5m', '5分钟'), ('1h', '1小时'), ('1d', '1天'),
+    ]
+    name = models.CharField("策略名称", max_length=100)
+    metric_type = models.CharField("指标类型", max_length=50, default='raw',
+        help_text="raw=原始明细, aggregated=聚合数据")
+    retention_days = models.PositiveIntegerField("保留天数", default=30)
+    aggregation_interval = models.CharField("聚合间隔", max_length=20, default='1h',
+        choices=INTERVAL_CHOICES)
+    is_active = models.BooleanField("是否启用", default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '数据保留策略'
+        verbose_name_plural = '数据保留策略'
+
+    def __str__(self):
+        return f"{self.name} ({self.metric_type}: {self.retention_days}天)"
+
+
+class MetricAggregation(models.Model):
+    INTERVAL_CHOICES = [
+        ('5m', '5分钟'), ('1h', '1小时'), ('1d', '1天'),
+    ]
+    server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='metric_aggregations', verbose_name="服务器")
+    cloud_resource = models.ForeignKey(CloudResource, on_delete=models.CASCADE,
+        null=True, blank=True, related_name='metric_aggregations', verbose_name="云资源")
+    metric_type = models.CharField("指标类型", max_length=50,
+        help_text="cpu_usage/mem_usage/disk_usage等")
+    aggregation_interval = models.CharField("聚合间隔", max_length=20, default='1h',
+        choices=INTERVAL_CHOICES)
+    avg_value = models.FloatField("平均值", default=0.0)
+    max_value = models.FloatField("最大值", default=0.0)
+    min_value = models.FloatField("最小值", default=0.0)
+    sample_count = models.PositiveIntegerField("样本数", default=0)
+    timestamp = models.DateTimeField("时间戳", db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '指标聚合'
+        verbose_name_plural = '指标聚合'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['server', 'metric_type', '-timestamp']),
+            models.Index(fields=['cloud_resource', 'metric_type', '-timestamp']),
+        ]
+
+    def __str__(self):
+        target = self.server.hostname if self.server else (self.cloud_resource.instance_name if self.cloud_resource else '?')
+        return f"{target} {self.metric_type} avg={self.avg_value:.1f} @{self.timestamp:%m-%d %H:%M}"
+
+
+class LogEntry(models.Model):
+    LEVEL_CHOICES = [
+        ('EMERG', 'EMERG'), ('ALERT', 'ALERT'), ('CRIT', 'CRIT'),
+        ('ERROR', 'ERROR'), ('WARN', 'WARN'), ('NOTICE', 'NOTICE'),
+        ('INFO', 'INFO'), ('DEBUG', 'DEBUG'),
+    ]
+    server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE,
+        related_name='log_entries', verbose_name="服务器")
+    timestamp = models.DateTimeField("日志时间", db_index=True)
+    level = models.CharField("级别", max_length=10, choices=LEVEL_CHOICES, db_index=True)
+    source = models.CharField("来源", max_length=50, default='syslog')
+    message = models.TextField("日志内容")
+    message_vector = _vector_field(dimensions=1536)
+    structured_data = models.JSONField("结构化数据", default=dict)
+    is_anomaly = models.BooleanField("是否异常", default=False, db_index=True)
+    pattern_id = models.IntegerField("模式ID", null=True, blank=True, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '日志条目'
+        verbose_name_plural = '日志条目'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['server', '-timestamp']),
+            models.Index(fields=['level', '-timestamp']),
+        ]
+
+    def __str__(self):
+        return f"[{self.level}] {self.message[:80]}"
+
+
+class LogPattern(models.Model):
+    server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='log_patterns', verbose_name="服务器")
+    pattern_template = models.TextField("模式模板")
+    pattern_vector = _vector_field(dimensions=1536)
+    level = models.CharField("级别", max_length=10, default='ERROR')
+    source = models.CharField("来源", max_length=50, default='syslog')
+    occurrence_count = models.PositiveIntegerField("出现次数", default=1)
+    first_seen = models.DateTimeField("首次出现")
+    last_seen = models.DateTimeField("最后出现")
+    is_anomaly_pattern = models.BooleanField("异常模式", default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '日志模式'
+        verbose_name_plural = '日志模式'
+        ordering = ['-occurrence_count']
+
+    def __str__(self):
+        return f"[{self.level}] {self.pattern_template[:80]} (×{self.occurrence_count})"
+
+
+class TraceSpan(models.Model):
+    STATUS_CHOICES = [('OK', 'OK'), ('ERROR', 'ERROR'), ('UNSET', 'UNSET')]
+    trace_id = models.CharField("TraceID", max_length=32, db_index=True)
+    span_id = models.CharField("SpanID", max_length=16)
+    parent_span_id = models.CharField("ParentSpanID", max_length=16, null=True, blank=True)
+    server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='trace_spans', verbose_name="服务器")
+    service_name = models.CharField("服务名", max_length=100, db_index=True)
+    operation = models.CharField("操作", max_length=200)
+    start_time = models.DateTimeField("开始时间", db_index=True)
+    duration_ms = models.IntegerField("耗时(ms)", default=0)
+    status = models.CharField("状态", max_length=10, choices=STATUS_CHOICES, default='UNSET', db_index=True)
+    error_message = models.TextField("错误信息", blank=True)
+    attributes = models.JSONField("属性", default=dict)
+    span_vector = _vector_field(dimensions=1536)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = '链路追踪'
+        verbose_name_plural = '链路追踪'
+        ordering = ['-start_time']
+        indexes = [
+            models.Index(fields=['service_name', '-start_time']),
+            models.Index(fields=['status', '-start_time']),
+        ]
+
+    def __str__(self):
+        return f"{self.service_name} {self.operation} ({self.duration_ms}ms)"
+
+
+class WebhookEndpoint(models.Model):
+    name = models.CharField(max_length=200)
+    url = models.URLField()
+    secret = models.CharField(max_length=200, blank=True, default='')
+    events = models.JSONField(default=list, help_text="订阅的事件类型: ['alert.fired','alert.resolved','remediation.success','remediation.failed']")
+    is_active = models.BooleanField(default=True)
+    last_status = models.CharField(max_length=20, blank=True, default='')
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Webhook端点'
+        verbose_name_plural = 'Webhook端点'
+
+    def __str__(self):
+        return f"{self.name} -> {self.url}"
+
+
+class CaseVector(models.Model):
+    title = models.CharField("案例标题", max_length=200)
+    symptoms = models.TextField("症状描述")
+    root_cause = models.TextField("根因分析")
+    remediation = models.TextField("修复方式")
+    confidence = models.FloatField("置信度", default=0.0)
+    effectiveness_score = models.FloatField("有效性评分", default=0.0)
+    usage_count = models.PositiveIntegerField("使用次数", default=0)
+    symptom_vector = _vector_field(dimensions=1536)
+    related_alert_rules = models.JSONField("关联告警规则", default=list)
+    related_runbook = models.ForeignKey('monitoring.RunbookEntry',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='case_vectors', verbose_name="关联Runbook")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '历史案例'
+        verbose_name_plural = '历史案例'
+        ordering = ['-effectiveness_score']
+
+    def __str__(self):
+        return f"{self.title} (置信度={self.confidence:.2f}, 有效性={self.effectiveness_score:.1f})"
+
+
+class MetricBaseline(models.Model):
+    server = models.ForeignKey('cmdb.Server', on_delete=models.CASCADE, related_name='metric_baselines', verbose_name="服务器")
+    metric_name = models.CharField("指标名", max_length=50)
+    hour_of_day = models.IntegerField("小时(0-23)")
+    weekday = models.IntegerField("星期(0-6,0=周一)", null=True, blank=True)
+    avg_value = models.FloatField("平均值")
+    std_dev = models.FloatField("标准差", default=0)
+    sample_count = models.IntegerField("样本数", default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = '指标基线'
+        verbose_name_plural = '指标基线'
+        unique_together = ('server', 'metric_name', 'hour_of_day', 'weekday')
+        indexes = [
+            models.Index(fields=['server', 'metric_name', 'hour_of_day']),
+        ]
+
+    def __str__(self):
+        return f"{self.server.hostname} {self.metric_name} h={self.hour_of_day} w={self.weekday} avg={self.avg_value:.2f}"

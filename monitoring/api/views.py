@@ -6,15 +6,28 @@ from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Count,Q
 from datetime import timedelta
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiResponse
 
 from monitoring.models import AlertRule, AlertEvent, AlertSilenceRule
 from monitoring.engine.rule_evaluator import RuleEvaluator
 
 
+def paginate_queryset(qs, request, default_size=20):
+    page = max(1, int(request.GET.get('page', 1)))
+    page_size = min(100, max(1, int(request.GET.get('page_size', default_size))))
+    total = qs.count()
+    start = (page - 1) * page_size
+    end = start + page_size
+    items = qs[start:end]
+    return items, {'total': total, 'page': page, 'page_size': page_size}
+
+
+@extend_schema(summary='告警规则列表')
 @login_required
 @require_GET
 def api_rules(request):
     rules = AlertRule.objects.all().order_by('-created_at')
+    items, pagination = paginate_queryset(rules, request)
     data = [{
         'id': r.id,'name':r.name,'description':r.description or '',
         'rule_type':r.rule_type,'severity':r.severity,'status':r.status,
@@ -23,8 +36,8 @@ def api_rules(request):
         'notify_channels':r.notify_channels,'trigger_count':r.trigger_count,
         'last_triggered_at':r.last_triggered_at.isoformat() if r.last_triggered_at else None,
         'created_at':r.created_at.isoformat(),
-    } for r in rules]
-    return JsonResponse({'code':0,'data':{'items':data,'total':len(data)}})
+    } for r in items]
+    return JsonResponse({'code':0,'data':{'items':data, **pagination}})
 
 
 @login_required
@@ -62,20 +75,24 @@ def api_rule_toggle(request, pk):
         return JsonResponse({'code':1,'msg':'规则不存在'}, status=404)
 
 
+@extend_schema(
+    summary='告警事件列表',
+    parameters=[
+        OpenApiParameter(name='status', type=str, description='告警状态过滤'),
+        OpenApiParameter(name='severity', type=str, description='告警级别过滤'),
+    ],
+)
 @login_required
 @require_GET
 def api_alerts(request):
     status_filter = request.GET.get('status','')
     severity = request.GET.get('severity','')
-    page = int(request.GET.get('page',1))
-    size = int(request.GET.get('size',20))
 
     qs = AlertEvent.objects.all()
     if status_filter: qs = qs.filter(status=status_filter)
     if severity: qs = qs.filter(severity=severity)
 
-    total = qs.count()
-    items = qs.order_by('-fired_at')[(page-1)*size:page*size]
+    items, pagination = paginate_queryset(qs.order_by('-fired_at'), request)
     data = [{
         'id':a.id,'rule_name':a.rule.name,'server_name':a.server.hostname if a.server else '',
         'severity':a.severity,'status':a.status,'metric_name':a.metric_name,
@@ -83,7 +100,7 @@ def api_alerts(request):
         'message':a.message,'fired_at':a.fired_at.isoformat(),
         'duration_sec':int(a.duration),
     } for a in items]
-    return JsonResponse({'code':0,'data':{'items':data,'total':total,'page':page}})
+    return JsonResponse({'code':0,'data':{'items':data, **pagination}})
 
 
 @login_required
@@ -134,6 +151,7 @@ def api_alert_silence(request):
         return JsonResponse({'code':1,'msg':str(e)})
 
 
+@extend_schema(summary='告警统计概览')
 @login_required
 @require_GET
 def api_alert_stats(request):
@@ -569,6 +587,101 @@ def api_runbook_feedback(request):
 
 
 @login_required
+@csrf_exempt
+def api_alert_comments(request, alert_id=None):
+    from monitoring.models import AlertComment, AlertEvent
+    import json
+
+    try:
+        alert = AlertEvent.objects.get(pk=alert_id)
+    except (AlertEvent.DoesNotExist, ValueError, TypeError):
+        return JsonResponse({'code':1,'msg':'告警事件不存在'}, status=404)
+
+    if request.method == 'GET':
+        comments = alert.comments.select_related('author').order_by('created_at')
+        items = [{
+            'id': c.id,
+            'author': c.author.username if c.author else None,
+            'comment_type': c.comment_type,
+            'content': c.content,
+            'is_internal': c.is_internal,
+            'created_at': c.created_at.isoformat(),
+        } for c in comments]
+        return JsonResponse({'code':0,'data':{'items':items,'total':comments.count()}})
+
+    elif request.method == 'POST':
+        data = json.loads(request.body)
+        comment = AlertComment.objects.create(
+            alert_event=alert,
+            author=request.user,
+            comment_type=data.get('comment_type','text'),
+            content=data.get('content',''),
+            is_internal=data.get('is_internal',False),
+        )
+        if data.get('auto_resolve') and alert.status != 'resolved':
+            alert.status = 'resolved'
+            alert.resolved_at = timezone.now()
+            alert.resolved_by = request.user
+            alert.resolve_reason = data.get('resolve_reason','manual_fixed')
+            alert.resolve_comment = data.get('resolve_comment','通过评论关闭')
+            alert.save()
+        return JsonResponse({'code':0,'data':{'id':comment.id}})
+
+    return JsonResponse({'code':1,'msg':'不支持的请求方法'}, status=405)
+
+
+@login_required
+@require_POST
+def api_alert_resolve_with_reason(request):
+    import json
+    try:
+        data = json.loads(request.body)
+        alert_id = data.get('alert_id')
+        reason = data.get('resolve_reason')
+        comment = data.get('resolve_comment','')
+
+        from monitoring.models import AlertEvent
+        try:
+            alert = AlertEvent.objects.get(pk=alert_id)
+        except AlertEvent.DoesNotExist:
+            return JsonResponse({'code':1,'msg':'告警不存在'}, status=404)
+
+        if alert.status == 'resolved':
+            return JsonResponse({'code':1,'msg':'告警已处于已恢复状态'})
+
+        valid_reasons = [r[0] for r in AlertEvent.RESOLVE_REASON_CHOICES]
+        if reason and reason not in valid_reasons:
+            return JsonResponse({'code':1,'msg':f'无效的关闭原因，可选: {valid_reasons}'})
+
+        alert.status = 'resolved'
+        alert.resolved_at = timezone.now()
+        alert.resolved_by = request.user
+        alert.resolve_reason = reason or ''
+        alert.resolve_comment = comment
+        alert.save()
+
+        if data.get('add_comment'):
+            from monitoring.models import AlertComment
+            AlertComment.objects.create(
+                alert_event=alert,
+                author=request.user,
+                comment_type='resolve',
+                content=f'关闭告警 - {dict(AlertEvent.RESOLVE_REASON_CHOICES).get(reason,reason)}\n{comment}',
+            )
+
+        return JsonResponse({
+            'code':0,
+            'data': {
+                'status': alert.status,
+                'resolve_reason': alert.resolve_reason,
+                'resolved_at': alert.resolved_at.isoformat(),
+            }
+        })
+    except Exception as e:
+        return JsonResponse({'code':1,'msg':str(e)})
+
+
+@login_required
 @require_GET
 def api_remediation_history(request):
     qs = RemediationHistory.objects.select_related('action','alert_event__rule','alert_event__server').order_by('-started_at')
@@ -625,10 +738,23 @@ def api_agent_push(request):
     if not token_str:
         return JsonResponse({'code':1,'msg':'missing_token'}, status=401)
 
-    from monitoring.agent.push_api import AgentPushHandler
+    from monitoring.agent.push_api import AgentPushHandler, verify_signature
     agent = AgentPushHandler.authenticate(token_str)
     if not agent:
         return JsonResponse({'code':1,'msg':'invalid_token'}, status=403)
+
+    sig = request.META.get('HTTP_X_SIGNATURE', '')
+    ts_header = request.META.get('HTTP_X_TIMESTAMP', '')
+    body = request.body.decode('utf-8') if isinstance(request.body, bytes) else request.body
+
+    if sig and ts_header:
+        if not verify_signature(agent.token, ts_header, body, sig):
+            return JsonResponse({'code':1,'msg':'invalid_signature'}, status=403)
+    else:
+        import logging
+        logging.getLogger(__name__).warning(
+            f"[AgentPush] 缺少签名头: agent={agent.name}, token_preview={agent.token[:8]}..."
+        )
 
     try:
         import json
@@ -818,3 +944,491 @@ def api_dashboard_delete(request, dash_id):
 
 
 from cmdb.models import Server as CMDBServer
+
+
+@login_required
+@require_GET
+def api_local_servers(request):
+    from cmdb.models import Server, ServerMetric
+    from django.db.models import Subquery, OuterRef
+    servers = Server.objects.filter(status='Running')
+    subq = ServerMetric.objects.filter(server=OuterRef('id')).order_by('-collected_at')
+    servers = servers.annotate(
+        latest_cpu=Subquery(subq.values('cpu_usage')[:1]),
+        latest_mem=Subquery(subq.values('mem_usage')[:1]),
+        latest_disk=Subquery(subq.values('disk_usage')[:1]),
+    )
+    items, pagination = paginate_queryset(servers, request)
+    data = [{
+        'id': s.id, 'hostname': s.hostname, 'ip_address': s.ip_address,
+        'status': s.status, 'os_type': s.os_type or '',
+        'cpu_usage': round(s.latest_cpu, 1) if s.latest_cpu else None,
+        'mem_usage': round(s.latest_mem, 1) if s.latest_mem else None,
+        'disk_usage': round(s.latest_disk, 1) if s.latest_disk else None,
+    } for s in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@require_GET
+def api_cloud_accounts(request):
+    from cmdb.models import CloudAccount
+    accounts = CloudAccount.objects.all().order_by('-create_at')
+    items, pagination = paginate_queryset(accounts, request)
+    data = [{
+        'id': a.id, 'name': a.name, 'type': a.type,
+        'get_type_display': a.get_type_display(),
+        'access_key': a.access_key[:8] + '...' if a.access_key else '',
+        'region': a.region,
+        'is_active': a.is_active,
+    } for a in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_cloud_account_create(request):
+    from cmdb.models import CloudAccount
+    try:
+        data = json.loads(request.body)
+        account = CloudAccount.objects.create(
+            name=data.get('name', ''),
+            access_key=data.get('access_key', ''),
+            secret_key=data.get('secret_key', ''),
+            region=data.get('region', 'cn-hangzhou'),
+            type=data.get('type', 'aliyun'),
+            is_active=data.get('is_active', True),
+        )
+        return JsonResponse({'code': 0, 'data': {'id': account.id}})
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)})
+
+
+@login_required
+@csrf_exempt
+@require_http_methods(['PUT', 'POST'])
+def api_cloud_account_update(request, pk):
+    from cmdb.models import CloudAccount
+    try:
+        account = CloudAccount.objects.get(id=pk)
+        data = json.loads(request.body)
+        if 'name' in data: account.name = data['name']
+        if 'access_key' in data: account.access_key = data['access_key']
+        if 'secret_key' in data: account.secret_key = data['secret_key']
+        if 'region' in data: account.region = data['region']
+        if 'is_active' in data: account.is_active = data['is_active']
+        account.save()
+        return JsonResponse({'code': 0})
+    except CloudAccount.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)})
+
+
+@login_required
+@require_http_methods(['DELETE', 'POST'])
+def api_cloud_account_delete(request, pk):
+    from cmdb.models import CloudAccount
+    try:
+        account = CloudAccount.objects.get(id=pk)
+        account.delete()
+        return JsonResponse({'code': 0})
+    except CloudAccount.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_cloud_account_test(request, pk):
+    from cmdb.models import CloudAccount
+    from monitoring.cloud_adapters import AdapterRegistry
+    try:
+        account = CloudAccount.objects.get(id=pk)
+        adapter = AdapterRegistry.from_cloud_account(account)
+        if not adapter:
+            return JsonResponse({'code': 1, 'msg': f'未注册的云厂商: {account.type}'})
+        result = adapter.test_connection()
+        return JsonResponse({'code': 0, 'data': result})
+    except CloudAccount.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)})
+
+
+@login_required
+@require_GET
+def api_cloud_resources(request):
+    from monitoring.models import CloudResource
+    qs = CloudResource.objects.select_related('cloud_account', 'local_server').all()
+    provider = request.GET.get('provider')
+    resource_type = request.GET.get('resource_type')
+    if provider:
+        qs = qs.filter(provider=provider)
+    if resource_type:
+        qs = qs.filter(resource_type=resource_type)
+    items, pagination = paginate_queryset(qs, request)
+    data = [{
+        'id': r.id, 'provider': r.provider, 'get_provider_display': r.get_provider_display(),
+        'resource_type': r.resource_type, 'get_resource_type_display': r.get_resource_type_display(),
+        'instance_id': r.instance_id, 'instance_name': r.instance_name,
+        'region': r.region, 'is_active': r.is_active,
+        'cloud_account_name': r.cloud_account.name,
+        'local_server_name': r.local_server.hostname if r.local_server else '',
+        'last_sync_at': r.last_sync_at.isoformat() if r.last_sync_at else None,
+    } for r in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_cloud_resource_sync(request):
+    from monitoring.tasks import cloud_resources_sync
+    result = cloud_resources_sync()
+    return JsonResponse({'code': 0, 'data': result})
+
+
+@login_required
+@require_GET
+def api_cloud_resource_detail(request, pk):
+    from monitoring.models import CloudResource
+    try:
+        r = CloudResource.objects.select_related('cloud_account', 'local_server').get(id=pk)
+        data = {
+            'id': r.id, 'provider': r.provider, 'resource_type': r.resource_type,
+            'instance_id': r.instance_id, 'instance_name': r.instance_name,
+            'region': r.region, 'extra_config': r.extra_config,
+            'cloud_account': {'id': r.cloud_account.id, 'name': r.cloud_account.name},
+            'local_server': {'id': r.local_server.id, 'hostname': r.local_server.hostname} if r.local_server else None,
+            'last_sync_at': r.last_sync_at.isoformat() if r.last_sync_at else None,
+            'is_active': r.is_active,
+        }
+        return JsonResponse({'code': 0, 'data': data})
+    except CloudResource.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@require_GET
+def api_cloud_resource_metrics(request, pk):
+    from monitoring.models import CloudResource, MetricAggregation
+    try:
+        resource = CloudResource.objects.select_related('local_server').get(id=pk)
+    except CloudResource.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+    metric_name = request.GET.get('metric', 'cpu_usage')
+    range_str = request.GET.get('range', '24h')
+    range_map = {'1h': 1, '6h': 6, '24h': 24, '7d': 168, '30d': 720}
+    hours = range_map.get(range_str, 24)
+    since = timezone.now() - timedelta(hours=hours)
+
+    if resource.local_server:
+        from cmdb.models import ServerMetric
+        metrics = list(ServerMetric.objects.filter(
+            server=resource.local_server,
+            collected_at__gte=since,
+        ).order_by('collected_at').values_list('collected_at', metric_name))
+    else:
+        metrics = list(MetricAggregation.objects.filter(
+            cloud_resource=resource,
+            metric_type=metric_name,
+            timestamp__gte=since,
+        ).order_by('timestamp').values_list('timestamp', 'avg_value'))
+
+    times = [m[0].strftime('%H:%M') if hours <= 24 else m[0].strftime('%m-%d %H:%M') for m in metrics]
+    values = [round(float(m[1] or 0), 2) for m in metrics]
+
+    return JsonResponse({'code': 0, 'data': {
+        'times': times, 'values': values,
+        'metric_name': metric_name, 'resource_id': pk,
+    }})
+
+
+@csrf_exempt
+@require_POST
+def api_remote_write(request):
+    from monitoring.prometheus.remote_write import parse_remote_write_json, parse_remote_write
+    from cmdb.models import Server, ServerMetric
+
+    body = request.body
+    if not body:
+        return JsonResponse({'code': 1, 'msg': 'empty body'}, status=400)
+
+    parsed = parse_remote_write_json(body)
+    if not parsed:
+        parsed = parse_remote_write(body)
+
+    if not parsed:
+        return JsonResponse({'code': 1, 'msg': 'no valid metrics parsed'}, status=400)
+
+    created = 0
+    server_cache = {}
+
+    for item in parsed:
+        identifier = item.get('server_identifier', '')
+        metric_name = item.get('metric_name', '')
+        value = item.get('value', 0.0)
+        timestamp = item.get('timestamp')
+
+        if identifier not in server_cache:
+            server = Server.objects.filter(ip_address=identifier).first()
+            if not server:
+                server = Server.objects.filter(hostname=identifier).first()
+            server_cache[identifier] = server
+
+        server = server_cache.get(identifier)
+        if not server:
+            continue
+
+        metric_kwargs = {
+            'server': server,
+            'collected_at': timestamp or timezone.now(),
+            metric_name: value,
+        }
+        ServerMetric.objects.create(**metric_kwargs)
+        created += 1
+
+    return JsonResponse({'code': 0, 'data': {'samples_received': len(parsed), 'metrics_created': created}})
+
+
+@extend_schema(summary='OTLP链路数据接收')
+@csrf_exempt
+@require_POST
+def api_otlp_traces(request):
+    from monitoring.tracing.otlp_receiver import parse_otlp_http
+    from monitoring.models import TraceSpan
+    from cmdb.models import Server
+
+    try:
+        spans = parse_otlp_http(request.body)
+        created = 0
+        for span_data in spans:
+            server = None
+            ip = span_data.get('attributes', {}).get('host.ip', '')
+            hostname = span_data.get('attributes', {}).get('host.name', '')
+            if hostname:
+                server = Server.objects.filter(hostname=hostname).first()
+            if not server and ip:
+                server = Server.objects.filter(ip_address=ip).first()
+
+            TraceSpan.objects.create(
+                trace_id=span_data['trace_id'],
+                span_id=span_data['span_id'],
+                parent_span_id=span_data.get('parent_span_id'),
+                server=server,
+                service_name=span_data['service_name'],
+                operation=span_data['operation'],
+                start_time=span_data['start_time'],
+                duration_ms=span_data['duration_ms'],
+                status=span_data['status'],
+                error_message=span_data.get('error_message', ''),
+                attributes=span_data.get('attributes', {}),
+            )
+            created += 1
+
+        return JsonResponse({'code': 0, 'data': {'spans_received': len(spans), 'spans_created': created}})
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)}, status=500)
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_remediation_confirm(request, pk):
+    from monitoring.models import RemediationHistory
+    from monitoring.remediation.remediation_engine import execute_remediation_task
+    try:
+        history = RemediationHistory.objects.get(id=pk)
+        if history.status != 'pending_confirm':
+            return JsonResponse({'code': 1, 'msg': '当前状态不允许确认'}, status=400)
+        history.status = 'pending'
+        history.save(update_fields=['status'])
+        execute_remediation_task.delay(history.id)
+        return JsonResponse({'code': 0, 'data': {'id': history.id, 'status': 'executing'}})
+    except RemediationHistory.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@extend_schema(
+    summary='日志搜索',
+    parameters=[
+        OpenApiParameter(name='q', type=str, description='搜索关键词'),
+        OpenApiParameter(name='level', type=str, description='日志级别'),
+        OpenApiParameter(name='server_id', type=int, description='服务器ID'),
+        OpenApiParameter(name='since', type=str, description='时间范围(1h/6h/24h/7d)'),
+    ],
+)
+@login_required
+@require_GET
+def api_log_search(request):
+    from monitoring.models import LogEntry
+    keyword = request.GET.get('q', '')
+    level = request.GET.get('level', '')
+    server_id = request.GET.get('server_id', '')
+    since = request.GET.get('since', '1h')
+
+    qs = LogEntry.objects.select_related('server').all()
+    if level:
+        qs = qs.filter(level=level)
+    if server_id:
+        qs = qs.filter(server_id=server_id)
+
+    range_map = {'1h': 1, '6h': 6, '24h': 24, '7d': 168}
+    hours = range_map.get(since, 24)
+    qs = qs.filter(timestamp__gte=timezone.now() - timedelta(hours=hours))
+
+    if keyword:
+        qs = qs.filter(message__icontains=keyword)
+
+    items, pagination = paginate_queryset(qs, request)
+    data = [{
+        'id': e.id, 'server': e.server.hostname if e.server else '',
+        'timestamp': e.timestamp.isoformat(), 'level': e.level,
+        'source': e.source, 'message': e.message[:300],
+        'is_anomaly': e.is_anomaly,
+    } for e in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@require_GET
+def api_log_semantic_search(request):
+    from monitoring.models import LogEntry
+    query_text = request.GET.get('q', '')
+    if not query_text:
+        return JsonResponse({'code': 1, 'msg': '缺少查询文本'}, status=400)
+
+    try:
+        from monitoring.embedding.service import EmbeddingService
+        service = EmbeddingService()
+        query_vector = service.embed_text(query_text)
+        if not query_vector:
+            return JsonResponse({'code': 1, 'msg': '向量化失败'}, status=500)
+
+        from pgvector.django import L2Distance
+        results = LogEntry.objects.annotate(
+            distance=L2Distance('message_vector', query_vector)
+        ).filter(distance__lt=1.5).order_by('distance')[:20]
+
+        data = [{
+            'id': r.id, 'server': r.server.hostname if r.server else '',
+            'timestamp': r.timestamp.isoformat(), 'level': r.level,
+            'source': r.source, 'message': r.message[:300],
+            'distance': round(float(r.distance), 3),
+        } for r in results]
+        return JsonResponse({'code': 0, 'data': {'items': data}})
+    except ImportError:
+        return JsonResponse({'code': 1, 'msg': 'PgVector 未安装'}, status=500)
+    except Exception as e:
+        return JsonResponse({'code': 1, 'msg': str(e)}, status=500)
+
+
+@login_required
+@require_GET
+def api_trace_detail(request, trace_id):
+    from monitoring.models import TraceSpan
+    spans = TraceSpan.objects.filter(trace_id=trace_id).order_by('start_time')
+    data = [{
+        'span_id': s.span_id, 'parent_span_id': s.parent_span_id,
+        'service_name': s.service_name, 'operation': s.operation,
+        'start_time': s.start_time.isoformat(), 'duration_ms': s.duration_ms,
+        'status': s.status, 'error_message': s.error_message,
+        'attributes': s.attributes,
+    } for s in spans]
+    return JsonResponse({'code': 0, 'data': {'trace_id': trace_id, 'spans': data}})
+
+
+@login_required
+@require_GET
+def api_trace_services(request):
+    from monitoring.models import TraceSpan
+    from django.db.models import Count, Avg
+    since = timezone.now() - timedelta(hours=24)
+    services = TraceSpan.objects.filter(
+        start_time__gte=since
+    ).values('service_name').annotate(
+        span_count=Count('id'),
+        error_count=Count('id', filter=Q(status='ERROR')),
+        avg_duration=Avg('duration_ms'),
+    ).order_by('-span_count')
+    data = [{
+        'service_name': s['service_name'],
+        'span_count': s['span_count'],
+        'error_count': s['error_count'],
+        'avg_duration': round(s['avg_duration'] or 0, 1),
+    } for s in services]
+    return JsonResponse({'code': 0, 'data': {'items': data}})
+
+
+@extend_schema(summary='案例库列表')
+@login_required
+@require_GET
+def api_case_library(request):
+    from monitoring.models import CaseVector
+    qs = CaseVector.objects.all().order_by('-effectiveness_score')
+    items, pagination = paginate_queryset(qs, request)
+    data = [{
+        'id': c.id, 'title': c.title, 'root_cause': c.root_cause[:200],
+        'remediation': c.remediation[:200], 'confidence': c.confidence,
+        'effectiveness_score': c.effectiveness_score, 'usage_count': c.usage_count,
+        'created_at': c.created_at.isoformat(),
+    } for c in items]
+    return JsonResponse({'code': 0, 'data': {'items': data, **pagination}})
+
+
+@login_required
+@csrf_exempt
+@require_POST
+def api_case_feedback(request, pk):
+    from monitoring.models import CaseVector
+    try:
+        case = CaseVector.objects.get(id=pk)
+        data = json.loads(request.body)
+        is_effective = data.get('effective', True)
+        if is_effective:
+            case.effectiveness_score = min(1.0, case.effectiveness_score + 0.1)
+        else:
+            case.effectiveness_score = max(0.0, case.effectiveness_score - 0.2)
+        case.usage_count += 1
+        case.save(update_fields=['effectiveness_score', 'usage_count'])
+        return JsonResponse({'code': 0, 'data': {'effectiveness_score': case.effectiveness_score}})
+    except CaseVector.DoesNotExist:
+        return JsonResponse({'code': 1, 'msg': '不存在'}, status=404)
+
+
+@login_required
+@require_GET
+def api_capacity_forecast(request):
+    from monitoring.prediction.capacity_predictor import CapacityPredictor
+    from cmdb.models import Server
+
+    server_id = request.GET.get('server_id')
+    metric_name = request.GET.get('metric_name')
+
+    if server_id:
+        try:
+            server = Server.objects.get(id=int(server_id))
+        except (Server.DoesNotExist, ValueError):
+            return JsonResponse({'code': 1, 'msg': '服务器不存在'}, status=404)
+
+        if metric_name:
+            result = CapacityPredictor.predict_full_date(server, metric_name)
+            result['server_id'] = server.id
+            result['server_name'] = server.hostname
+            result['server_ip'] = server.ip_address
+            return JsonResponse({'code': 0, 'data': {'items': [result]}})
+
+        results = []
+        for mn in ['disk_usage', 'mem_usage']:
+            pred = CapacityPredictor.predict_full_date(server, mn)
+            pred['server_id'] = server.id
+            pred['server_name'] = server.hostname
+            pred['server_ip'] = server.ip_address
+            results.append(pred)
+        return JsonResponse({'code': 0, 'data': {'items': results}})
+
+    results = CapacityPredictor.scan_all_servers()
+    return JsonResponse({'code': 0, 'data': {'items': results, 'total': len(results)}})

@@ -1,0 +1,368 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="row" id="alertInfoCard" style="display:none;">
+    <div class="col-12">
+        <div class="card card-outline card-danger">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-exclamation-triangle mr-1"></i> 告警信息</h3>
+                <div class="card-tools">
+                    <span class="badge badge-danger" id="alertSeverity">-</span>
+                    <span class="badge badge-info ml-1" id="alertStatus">-</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">告警规则</small>
+                            <strong id="alertRuleName">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">目标服务器</small>
+                            <strong id="alertServerName">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">异常指标</small>
+                            <strong id="alertMetricName">-</strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">当前值 / 阈值</small>
+                            <strong><span id="alertCurrentValue" class="text-danger">-</span> / <span id="alertThresholdValue">-</span></strong>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="d-flex flex-column">
+                            <small class="text-muted">触发时间</small>
+                            <strong id="alertFiredAt">-</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2" id="alertMsgRow" style="display:none;">
+                    <div class="col-12">
+                        <small class="text-muted">告警消息</small>
+                        <div class="alert alert-warning py-1 px-2 mb-0" id="alertMessage"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="noAlertHint">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i class="fas fa-link fa-3x text-muted mb-3"></i>
+                <h5>多源关联分析</h5>
+                <p class="text-muted">请输入告警 ID 或从告警列表页跳转查看关联详情</p>
+                <div class="row justify-content-center">
+                    <div class="col-md-4">
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="inputAlertId" placeholder="输入告警 ID">
+                            <div class="input-group-append">
+                                <button class="btn btn-primary" onclick="loadByInput()"><i class="fas fa-search"></i> 查询</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3" id="correlationContent" style="display:none;">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-chart-line mr-1"></i> 指标趋势 (近1小时)</h3>
+                <div class="card-tools">
+                    <span class="text-muted small" id="metricLabel">-</span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="metricChart" style="height:300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-file-alt mr-1"></i> 关联日志 <span class="badge badge-secondary" id="logCount">0</span></h3>
+            </div>
+            <div class="card-body p-0" style="max-height:340px;overflow-y:auto;">
+                <ul class="list-group list-group-flush" id="logList">
+                    <li class="list-group-item text-center text-muted">加载中...</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3" id="traceSection" style="display:none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-project-diagram mr-1"></i> 链路异常</h3>
+                <div class="card-tools">
+                    <span class="badge badge-danger mr-1" id="traceErrorCount">0 错误</span>
+                    <span class="badge badge-warning" id="traceSlowCount">0 慢调用</span>
+                </div>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover text-nowrap table-sm">
+                    <thead>
+                        <tr>
+                            <th>类型</th>
+                            <th>TraceID</th>
+                            <th>服务</th>
+                            <th>操作</th>
+                            <th>耗时(ms)</th>
+                            <th>错误信息</th>
+                        </tr>
+                    </thead>
+                    <tbody id="traceTableBody">
+                        <tr><td colspan="6" class="text-center text-muted">暂无数据</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3" id="caseSection" style="display:none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title"><i class="fas fa-book-medical mr-1"></i> 历史相似案例 <span class="badge badge-info" id="caseCount">0</span></h3>
+            </div>
+            <div class="card-body" id="caseCards">
+                <div class="text-center text-muted">暂无相似案例</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<script>
+var metricChart = null;
+
+function escHtml(s) {
+    if (!s) return '';
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function getSeverityBadge(sev) {
+    var map = {'P0':'danger','P1':'danger','P2':'warning','P3':'info'};
+    return '<span class="badge badge-' + (map[sev] || 'secondary') + '">' + escHtml(sev) + '</span>';
+}
+
+function getLevelBadge(level) {
+    var map = {'DEBUG':'secondary','INFO':'info','WARN':'warning','WARNING':'warning','ERROR':'danger','CRIT':'danger','ALERT':'danger','EMERG':'danger'};
+    return '<span class="badge badge-' + (map[level] || 'secondary') + '">' + escHtml(level) + '</span>';
+}
+
+function getScoreColor(score) {
+    if (score >= 0.8) return 'success';
+    if (score >= 0.5) return 'warning';
+    return 'danger';
+}
+
+function loadByInput() {
+    var id = $('#inputAlertId').val().trim();
+    if (!id) { alert('请输入告警 ID'); return; }
+    window.location.href = '/monitoring/alerts/correlation/?alert_id=' + id;
+}
+
+function loadCorrelation(alertId) {
+    $('#noAlertHint').hide();
+    $('#alertInfoCard').show();
+    $('#correlationContent').show();
+    $('#traceSection').show();
+    $('#caseSection').show();
+
+    fetch('/api/monitoring/alerts/' + alertId + '/correlation/')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+            if (res.code !== 0) {
+                alert(res.msg || '查询失败');
+                return;
+            }
+            renderAlertInfo(res.data.alert_info);
+            renderMetricTrend(res.data.alert_info, res.data.metric_trend);
+            renderLogs(res.data.related_logs);
+            renderTraces(res.data.related_traces);
+            renderCases(res.data.similar_cases);
+        })
+        .catch(function(err) {
+            alert('请求失败: ' + err);
+        });
+}
+
+function renderAlertInfo(info) {
+    $('#alertRuleName').text(info.rule_name);
+    $('#alertServerName').text(info.server_name || '-');
+    $('#alertMetricName').text(info.metric_name);
+    $('#alertCurrentValue').text(info.current_value);
+    $('#alertThresholdValue').text(info.threshold_value || '-');
+    $('#alertFiredAt').text(info.fired_at ? info.fired_at.replace('T', ' ').substring(0, 19) : '-');
+    $('#alertSeverity').html(getSeverityBadge(info.severity));
+    $('#alertStatus').text(info.status);
+
+    if (info.message) {
+        $('#alertMsgRow').show();
+        $('#alertMessage').text(info.message);
+    }
+}
+
+function renderMetricTrend(info, trend) {
+    $('#metricLabel').text(info.metric_name);
+
+    if (!metricChart) {
+        metricChart = echarts.init(document.getElementById('metricChart'));
+        window.addEventListener('resize', function() { metricChart.resize(); });
+    }
+
+    var option = {
+        tooltip: { trigger: 'axis' },
+        grid: { left: 50, right: 20, top: 20, bottom: 30 },
+        xAxis: { type: 'category', data: trend.times, boundaryGap: false },
+        yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed' } } },
+        series: [{
+            type: 'line',
+            data: trend.values,
+            smooth: true,
+            symbol: 'none',
+            lineStyle: { color: '#e74c3c', width: 2 },
+            areaStyle: {
+                color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                    { offset: 0, color: 'rgba(231,76,60,0.3)' },
+                    { offset: 1, color: 'rgba(231,76,60,0.02)' }
+                ])
+            }
+        }]
+    };
+
+    if (info.threshold_value) {
+        option.series.push({
+            type: 'line',
+            data: trend.times.map(function() { return info.threshold_value; }),
+            lineStyle: { color: '#f39c12', type: 'dashed', width: 1 },
+            symbol: 'none',
+            markLine: {
+                silent: true,
+                data: [{ yAxis: info.threshold_value, lineStyle: { color: '#f39c12', type: 'dashed' } }]
+            }
+        });
+    }
+
+    metricChart.setOption(option, true);
+}
+
+function renderLogs(logs) {
+    $('#logCount').text(logs.length);
+    if (!logs.length) {
+        $('#logList').html('<li class="list-group-item text-center text-muted">暂无关联日志</li>');
+        return;
+    }
+    var html = '';
+    logs.forEach(function(log) {
+        var ts = log.timestamp ? log.timestamp.replace('T', ' ').substring(0, 19) : '-';
+        html += '<li class="list-group-item px-3 py-2">'
+            + '<div class="d-flex justify-content-between align-items-center">'
+            + '<span>' + getLevelBadge(log.level) + ' <small class="text-muted">' + escHtml(log.source) + '</small></span>'
+            + '<small class="text-muted">' + ts + '</small>'
+            + '</div>'
+            + '<div class="small mt-1" style="word-break:break-all;">' + escHtml(log.message) + '</div>'
+            + '</li>';
+    });
+    $('#logList').html(html);
+}
+
+function renderTraces(traces) {
+    if (!traces) { $('#traceSection').hide(); return; }
+
+    var errors = traces.errors || [];
+    var slow = traces.slow || [];
+    $('#traceErrorCount').text(errors.length + ' 错误');
+    $('#traceSlowCount').text(slow.length + ' 慢调用');
+
+    if (!errors.length && !slow.length) {
+        $('#traceTableBody').html('<tr><td colspan="6" class="text-center text-muted">暂无链路异常</td></tr>');
+        return;
+    }
+
+    var html = '';
+    errors.forEach(function(s) {
+        html += '<tr class="table-danger">'
+            + '<td><span class="badge badge-danger">ERROR</span></td>'
+            + '<td class="small">' + escHtml(s.trace_id) + '</td>'
+            + '<td>' + escHtml(s.service_name) + '</td>'
+            + '<td>' + escHtml(s.operation) + '</td>'
+            + '<td>' + s.duration_ms + '</td>'
+            + '<td class="small text-danger">' + escHtml(s.error_message) + '</td>'
+            + '</tr>';
+    });
+    slow.forEach(function(s) {
+        html += '<tr class="table-warning">'
+            + '<td><span class="badge badge-warning">SLOW</span></td>'
+            + '<td class="small">' + escHtml(s.trace_id) + '</td>'
+            + '<td>' + escHtml(s.service_name) + '</td>'
+            + '<td>' + escHtml(s.operation) + '</td>'
+            + '<td>' + s.duration_ms + '</td>'
+            + '<td>-</td>'
+            + '</tr>';
+    });
+    $('#traceTableBody').html(html);
+}
+
+function renderCases(cases) {
+    $('#caseCount').text(cases.length);
+    if (!cases.length) {
+        $('#caseCards').html('<div class="text-center text-muted">暂无相似案例</div>');
+        return;
+    }
+    var html = '<div class="row">';
+    cases.forEach(function(c) {
+        var scorePercent = Math.round((c.effectiveness_score || 0) * 100);
+        var scoreColor = getScoreColor(c.effectiveness_score || 0);
+        var confPercent = Math.round((c.confidence || 0) * 100);
+        var distance = c.distance !== undefined ? '<span class="badge badge-light ml-1">距离: ' + c.distance.toFixed(3) + '</span>' : '';
+
+        html += '<div class="col-md-4 mb-3">'
+            + '<div class="card card-outline card-' + scoreColor + ' h-100">'
+            + '<div class="card-header"><strong>' + escHtml(c.title) + '</strong>' + distance + '</div>'
+            + '<div class="card-body p-2">'
+            + '<p class="mb-1"><small class="text-muted">根因:</small> <small>' + escHtml((c.root_cause || '').substring(0, 100)) + '</small></p>'
+            + '<p class="mb-1"><small class="text-muted">修复:</small> <small>' + escHtml((c.remediation || '').substring(0, 100)) + '</small></p>'
+            + '<div class="d-flex align-items-center mt-2">'
+            + '<div class="progress flex-grow-1 mr-2" style="height:16px;">'
+            + '<div class="progress-bar bg-' + scoreColor + '" style="width:' + scorePercent + '%">' + scorePercent + '%</div>'
+            + '</div>'
+            + '<span class="badge badge-info">置信 ' + confPercent + '%</span>'
+            + '</div>'
+            + '</div>'
+            + '</div>'
+            + '</div>';
+    });
+    html += '</div>';
+    $('#caseCards').html(html);
+}
+
+$(function() {
+    var params = new URLSearchParams(window.location.search);
+    var alertId = params.get('alert_id');
+    if (alertId) {
+        loadCorrelation(alertId);
+    }
+});
+</script>
+{% endblock %}

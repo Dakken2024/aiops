@@ -1,0 +1,111 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block title %}批量解决告警 - 选择关闭原因{% endblock %}
+
+{% block content_title %}<h1>✅ 批量解决告警</h1>{% endblock %}
+
+{% block content %}
+<style>
+    .batch-resolve-container {
+        max-width: 700px;
+        margin: 20px auto;
+        background: #fff;
+        padding: 24px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .resolve-form .form-row {
+        margin-bottom: 16px;
+    }
+    .resolve-form label {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 6px;
+        color: #333;
+    }
+    .resolve-form select,
+    .resolve-form textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #d9d9d9;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .resolve-form textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+    .alert-count-info {
+        background: #e6f7ff;
+        border: 1px solid #91d5ff;
+        padding: 12px 16px;
+        border-radius: 6px;
+        margin-bottom: 20px;
+        color: #0050b3;
+        font-size: 15px;
+    }
+    .submit-row {
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid #f0f0f0;
+        text-align: right;
+    }
+    .submit-row input[type="submit"] {
+        background: #52c41a;
+        color: #fff;
+        border: none;
+        padding: 10px 28px;
+        border-radius: 4px;
+        font-size: 15px;
+        cursor: pointer;
+        font-weight: 500;
+        transition: background 0.3s;
+    }
+    .submit-row input[type="submit"]:hover {
+        background: #389e0d;
+    }
+    .cancel-link {
+        color: #999;
+        margin-right: 12px;
+        text-decoration: none;
+    }
+    .cancel-link:hover {
+        color: #666;
+    }
+</style>
+
+<form method="post" class="batch-resolve-container" action="" id="resolve-form">
+    {% csrf_token %}
+
+    <div class="alert-count-info">
+        📋 即将解决 <strong>{{ queryset|length }}</strong> 条告警事件
+    </div>
+
+    <div class="resolve-form">
+        <div class="form-row">
+            <label for="id_resolve_reason">关闭原因 <span style="color:#ff4d4f">*</span></label>
+            <select name="resolve_reason" id="id_resolve_reason" required>
+                <option value="">-- 请选择关闭原因 --</option>
+                {% for value, label in reason_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-row">
+            <label for="id_resolve_comment">处理备注（可选）</label>
+            <textarea name="resolve_comment" id="id_resolve_comment"
+                      placeholder="请输入处理说明、解决方案或备注信息..."></textarea>
+        </div>
+    </div>
+
+    <div class="submit-row">
+        {% for obj in queryset %}
+        <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">
+        {% endfor %}
+        <a href="javascript:history.back()" class="cancel-link">取消</a>
+        <input type="submit" name="apply" value="确认解决">
+    </div>
+</form>
+{% endblock %}
